@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'addnewproduct.dart';
 
 // Category model
 class Category {
@@ -38,7 +39,6 @@ class _InventoryScreenState extends State<InventoryScreen>
   String? errorMessage;
   String? storeId;
   String? branch;
-  bool _isAddingProduct = false;
   bool _isEditingProduct = false;
   List<Category> categories = [];
   Category? selectedCategory;
@@ -187,10 +187,6 @@ class _InventoryScreenState extends State<InventoryScreen>
     }
   }
 
-  void _showAddProductDialog(BuildContext context) {
-    _showProductDialog(context, isEdit: false);
-  }
-
   void _showEditProductDialog(BuildContext context, Map<String, dynamic> product) {
     _showProductDialog(context, isEdit: true, product: product);
   }
@@ -230,7 +226,7 @@ class _InventoryScreenState extends State<InventoryScreen>
 
     showDialog(
       context: context,
-      barrierDismissible: !(isEdit ? _isEditingProduct : _isAddingProduct),
+      barrierDismissible: !(isEdit ? _isEditingProduct : false),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
@@ -242,16 +238,12 @@ class _InventoryScreenState extends State<InventoryScreen>
                   _selectedCategory.categoryId != 0 &&
                   storeId != null &&
                   branch != null) {
-                if (isEdit) {
-                  setStateDialog(() => _isEditingProduct = true);
-                } else {
-                  setStateDialog(() => _isAddingProduct = true);
-                }
+                setStateDialog(() => _isEditingProduct = true);
                 try {
                   final headers = await _getAuthHeaders();
                   final Map<String, dynamic> payload = {
                     "name": nameController.text,
-                    "category": _selectedCategory.categoryId, // Use category_id (serial number)
+                    "category": _selectedCategory.categoryId,
                     "buy_price": [
                       double.tryParse(buyPriceController.text) ?? 0.0
                     ],
@@ -270,42 +262,29 @@ class _InventoryScreenState extends State<InventoryScreen>
 
                   Uri url;
                   http.Response resp;
-                  if (isEdit && product != null && product["id"] != null) {
-                    url = Uri.parse('${apiUrl}products/update/${product["id"]}');
+                  if (isEdit && product != null && product["product_id"] != null) {
+                    url = Uri.parse('${apiUrl}products/update/${product["product_id"]}');
                     resp = await http.put(
                       url,
                       headers: headers,
                       body: jsonEncode(payload),
                     );
                   } else {
-                    url = Uri.parse('${apiUrl}products/add');
-                    resp = await http.post(
-                      url,
-                      headers: headers,
-                      body: jsonEncode(payload),
-                    );
+                    throw Exception('Add product not allowed here');
                   }
 
                   setStateDialog(() {
-                    if (isEdit) {
-                      _isEditingProduct = false;
-                    } else {
-                      _isAddingProduct = false;
-                    }
+                    _isEditingProduct = false;
                   });
 
                   if (resp.statusCode == 200 || resp.statusCode == 201) {
                     Navigator.of(context).pop();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text(
-                              isEdit ? "Product updated" : "Product added")),
+                      SnackBar(content: Text("Product updated")),
                     );
                     await fetchUserAndInventory();
                   } else {
-                    String errorText = isEdit
-                        ? "Failed to update product"
-                        : "Failed to add product";
+                    String errorText = "Failed to update product";
                     try {
                       final body = jsonDecode(resp.body);
                       if (body is Map && body['detail'] != null) {
@@ -324,11 +303,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                   }
                 } catch (e) {
                   setStateDialog(() {
-                    if (isEdit) {
-                      _isEditingProduct = false;
-                    } else {
-                      _isAddingProduct = false;
-                    }
+                    _isEditingProduct = false;
                   });
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text("Error: $e")),
@@ -336,8 +311,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                 }
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text("Please fill in all fields with valid data")),
+                  const SnackBar(content: Text("Please fill in all fields with valid data")),
                 );
               }
             }
@@ -350,15 +324,12 @@ class _InventoryScreenState extends State<InventoryScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(isEdit ? "Edit Product" : "Add Product",
-                          style: const TextStyle(
-                              color: Colors.black, fontSize: 18)),
+                      Text("Edit Product", style: const TextStyle(color: Colors.black, fontSize: 18)),
                       const SizedBox(height: 16),
                       _buildTextField(nameController, "Product Name"),
                       const SizedBox(height: 16),
                       _buildTextField(descriptionController, "Description"),
                       const SizedBox(height: 16),
-                      // Category Dropdown
                       DropdownButtonFormField<Category>(
                         value: _selectedCategory.categoryId == 0 ? null : _selectedCategory,
                         items: categories.map((cat) => DropdownMenuItem<Category>(
@@ -379,20 +350,17 @@ class _InventoryScreenState extends State<InventoryScreen>
                         ),
                       ),
                       const SizedBox(height: 16),
-                      _buildTextField(buyPriceController, "Buy Price",
-                          keyboardType: TextInputType.number),
+                      _buildTextField(buyPriceController, "Buy Price", keyboardType: TextInputType.number),
                       const SizedBox(height: 16),
-                      _buildTextField(sellPriceController, "Sell Price",
-                          keyboardType: TextInputType.number),
+                      _buildTextField(sellPriceController, "Sell Price", keyboardType: TextInputType.number),
                       const SizedBox(height: 16),
-                      _buildTextField(quantityController, "Quantity",
-                          keyboardType: TextInputType.number),
+                      _buildTextField(quantityController, "Quantity", keyboardType: TextInputType.number),
                       const SizedBox(height: 16),
                       _buildTextField(unitController, "Unit"),
                       const SizedBox(height: 16),
                       _buildTextField(skuController, "SKU"),
                       const SizedBox(height: 16),
-                      if (isEdit ? _isEditingProduct : _isAddingProduct)
+                      if (_isEditingProduct)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 12.0),
                           child: CircularProgressIndicator(),
@@ -401,26 +369,15 @@ class _InventoryScreenState extends State<InventoryScreen>
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           TextButton(
-                            onPressed: (isEdit
-                                ? _isEditingProduct
-                                : _isAddingProduct)
-                                ? null
-                                : () {
+                            onPressed: _isEditingProduct ? null : () {
                               Navigator.of(context).pop();
                             },
-                            child: const Text("Cancel",
-                                style: TextStyle(color: Colors.grey)),
+                            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
                           ),
                           ElevatedButton(
-                            onPressed: (isEdit
-                                ? _isEditingProduct
-                                : _isAddingProduct)
-                                ? null
-                                : handleAction,
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.pinkAccent),
-                            child: Text(isEdit ? "Update" : "Add",
-                                style: const TextStyle(color: Colors.white)),
+                            onPressed: _isEditingProduct ? null : handleAction,
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent),
+                            child: const Text("Update", style: TextStyle(color: Colors.white)),
                           ),
                         ],
                       ),
@@ -451,15 +408,47 @@ class _InventoryScreenState extends State<InventoryScreen>
     );
   }
 
-  void _deleteProduct(String productId) {
-    setState(() {
-      inventory.removeWhere((item) => item['id'] == productId);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Product deleted from inventory")),
-    );
-    // Optionally, reload inventory from server after deletion (if deletion is implemented in API)
-    // fetchUserAndInventory();
+  // Send {"product_id": int} to products/del-prod via POST
+  Future<void> _deleteProduct(int productId) async {
+    final headers = await _getAuthHeaders();
+    try {
+      final url = Uri.parse('${apiUrl}products/del-prod');
+      final resp = await http.post(
+        url,
+        headers: headers,
+        body: jsonEncode({"product_id": productId}),
+      );
+      if (resp.statusCode == 200) {
+        setState(() {
+          inventory.removeWhere((item) => item['product_id'] == productId);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Product deleted from inventory")),
+        );
+        await fetchUserAndInventory();
+      } else {
+        String errorText = "Failed to delete product";
+        try {
+          final body = jsonDecode(resp.body);
+          if (body is Map && body['detail'] != null) {
+            errorText = "Error: ${body['detail']}";
+          } else if (body is Map && body['message'] != null) {
+            errorText = "Error: ${body['message']}";
+          } else {
+            errorText = resp.body.toString();
+          }
+        } catch (_) {
+          errorText = resp.body.toString();
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorText)),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
+    }
   }
 
   String _getCategoryName(int? catId) {
@@ -473,15 +462,6 @@ class _InventoryScreenState extends State<InventoryScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context); // for AutomaticKeepAliveClientMixin
-    final double screenWidth = MediaQuery.of(context).size.width;
-    int crossAxisCount = 4;
-    if (screenWidth > 1400) {
-      crossAxisCount = 7;
-    } else if (screenWidth > 1200) {
-      crossAxisCount = 6;
-    } else if (screenWidth > 900) {
-      crossAxisCount = 5;
-    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -501,168 +481,215 @@ class _InventoryScreenState extends State<InventoryScreen>
           )
         ],
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : errorMessage != null
-          ? Center(
-          child: Text(errorMessage!,
-              style: const TextStyle(color: Colors.red)))
-          : inventory.isEmpty
-          ? const Center(
-          child: Text('No products found.',
-              style: TextStyle(color: Colors.black)))
-          : Padding(
-        padding: const EdgeInsets.all(10.0),
-        child: GridView.builder(
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.0,
-          ),
-          itemCount: inventory.length,
-          itemBuilder: (context, index) {
-            final product = inventory[index];
-            return Material(
-              elevation: 4,
-              borderRadius: BorderRadius.circular(16),
-              shadowColor: Colors.black26,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                      color: Colors.grey.shade300, width: 1),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 6,
-                      spreadRadius: 1,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding:
-                  const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                        children: [
-                          ClipRRect(
-                            borderRadius:
-                            BorderRadius.circular(6),
-                            child: Image.network(
-                              product["image"] ??
-                                  "https://www.pngall.com/wp-content/uploads/8/Sample.png",
-                              height: 40,
-                              width: 40,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error,
-                                  stackTrace) {
-                                return Container(
-                                  color: Colors.grey[200],
-                                  height: 40,
-                                  width: 40,
-                                  child: const Icon(Icons.image,
-                                      color: Colors.grey),
-                                );
-                              },
+      body: Stack(
+        children: [
+          isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : errorMessage != null
+              ? Center(
+              child: Text(errorMessage!,
+                  style: const TextStyle(color: Colors.red)))
+              : inventory.isEmpty
+              ? const Center(
+              child: Text('No products found.',
+                  style: TextStyle(color: Colors.black)))
+              : Padding(
+            padding: const EdgeInsets.only(bottom: 80.0), // leave space for buttons
+            child: ListView.builder(
+              itemCount: inventory.length,
+              itemBuilder: (context, index) {
+                final product = inventory[index];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Material(
+                    elevation: 2,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: Colors.grey.shade300, width: 1),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 4,
+                            spreadRadius: 1,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: Image.network(
+                                product["image"] ??
+                                    "https://www.pngall.com/wp-content/uploads/8/Sample.png",
+                                height: 50,
+                                width: 50,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: Colors.grey[200],
+                                    height: 50,
+                                    width: 50,
+                                    child: const Icon(Icons.image, color: Colors.grey),
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            icon: const Icon(Icons.edit,
-                                color: Colors.blue, size: 18),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () =>
-                                _showEditProductDialog(
-                                    context, product),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete,
-                                color: Colors.redAccent,
-                                size: 18),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () => _deleteProduct(
-                                product['id'] ?? ""),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        product["name"] ?? "",
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    product["name"] ?? "",
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    product["description"] ?? "",
+                                    style: const TextStyle(
+                                        color: Colors.grey, fontSize: 12),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Wrap(
+                                    spacing: 5,
+                                    runSpacing: 4,
+                                    children: [
+                                      _metricBox("Cat", _getCategoryName(product["category"])),
+                                      _metricBox("Unit", product["unit"]),
+                                      _metricBox("SKU", product["sku"]),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      _metricBox(
+                                          "Buy",
+                                          product["buy_price"] is List &&
+                                              product["buy_price"].isNotEmpty
+                                              ? product["buy_price"][0]
+                                              : ""),
+                                      const SizedBox(width: 5),
+                                      _metricBox(
+                                          "Sell",
+                                          product["sell_price"] is List &&
+                                              product["sell_price"].isNotEmpty
+                                              ? product["sell_price"][0]
+                                              : ""),
+                                      const SizedBox(width: 5),
+                                      _metricBox(
+                                          "Qty",
+                                          product["quantity"] is List &&
+                                              product["quantity"].isNotEmpty
+                                              ? product["quantity"][0]
+                                              : ""),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Column(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                                  onPressed: () => _showEditProductDialog(context, product),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                                  onPressed: () => _deleteProduct(product['product_id'] ?? 0),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        product["description"] ?? "",
-                        style: const TextStyle(
-                            color: Colors.grey, fontSize: 11),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 5,
-                        runSpacing: 4,
-                        children: [
-                          _metricBox("Cat", _getCategoryName(product["category"])),
-                          _metricBox("Unit", product["unit"]),
-                          _metricBox("SKU", product["sku"]),
-                        ],
-                      ),
-                      const Spacer(),
-                      Row(
-                        children: [
-                          _metricBox(
-                              "Buy",
-                              product["buy_price"] is List &&
-                                  product["buy_price"]
-                                      .isNotEmpty
-                                  ? product["buy_price"][0]
-                                  : ""),
-                          const SizedBox(width: 5),
-                          _metricBox(
-                              "Sell",
-                              product["sell_price"] is List &&
-                                  product["sell_price"]
-                                      .isNotEmpty
-                                  ? product["sell_price"][0]
-                                  : ""),
-                          const SizedBox(width: 5),
-                          _metricBox(
-                              "Qty",
-                              product["quantity"] is List &&
-                                  product["quantity"]
-                                      .isNotEmpty
-                                  ? product["quantity"][0]
-                                  : ""),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+                );
+              },
+            ),
+          ),
+          // Bottom button bar
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      // "Add New Product" navigates as before
+                      onPressed: () {
+                        Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => AddNewProductScreen(
+                            storeId: storeId,
+                            branch: branch,
+                            categories: categories,
+                            apiUrl: apiUrl,
+                            apiToken: apiToken,
+                            fetchInventoryCallback: fetchUserAndInventory,
+                          ),
+                        ));
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text('Add New Product', style: TextStyle(fontSize: 16, color: Colors.white)),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      // "Add Product" navigates the same as "Add New Product"
+                      onPressed: () {
+                        Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => AddNewProductScreen(
+                            storeId: storeId,
+                            branch: branch,
+                            categories: categories,
+                            apiUrl: apiUrl,
+                            apiToken: apiToken,
+                            fetchInventoryCallback: fetchUserAndInventory,
+                          ),
+                        ));
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text('Add Product', style: TextStyle(fontSize: 16, color: Colors.white)),
+                    ),
+                  ),
+                ],
               ),
-            );
-          },
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddProductDialog(context),
-        backgroundColor: Colors.pinkAccent,
-        child: const Icon(Icons.add, color: Colors.white),
+            ),
+          ),
+        ],
       ),
     );
   }

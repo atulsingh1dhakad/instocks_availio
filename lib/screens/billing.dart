@@ -51,6 +51,7 @@ class _BillingscreenState extends State<Billingscreen> {
       final String authorizationHeader =
           '${tokenType[0].toUpperCase()}${tokenType.substring(1).toLowerCase()} ${useAccessToken ?? ""}';
 
+      // Fetch user info to get store_id and branch
       final userUrl = Uri.parse('${apiUrl}users/me');
       final userResp = await http.get(
         userUrl,
@@ -81,9 +82,12 @@ class _BillingscreenState extends State<Billingscreen> {
         return;
       }
 
-      final invUrl = Uri.parse('${apiUrl}store/inventory/$storeId/$branch');
-      final invResp = await http.get(
-        invUrl,
+      // Use new endpoint with params (as in Postman)
+      final productsUrl = Uri.parse(
+        '${apiUrl}products/get-all-product-with-price/?store_id=$storeId&branch=$branch',
+      );
+      final productsResp = await http.get(
+        productsUrl,
         headers: {
           'Content-Type': 'application/json',
           'x-api-token': apiToken,
@@ -91,20 +95,33 @@ class _BillingscreenState extends State<Billingscreen> {
         },
       );
 
-      if (invResp.statusCode != 200) {
+      if (productsResp.statusCode != 200) {
         setState(() {
           isLoading = false;
-          errorMessage = "Failed to load inventory: ${invResp.statusCode}";
+          errorMessage = "Failed to load products: ${productsResp.statusCode}";
         });
         return;
       }
 
-      final data = json.decode(invResp.body);
+      final productsData = json.decode(productsResp.body);
       List<Map<String, dynamic>> items = [];
-      if (data is List) {
-        items = List<Map<String, dynamic>>.from(data);
-      } else if (data is Map && data["inventory"] is List) {
-        items = List<Map<String, dynamic>>.from(data["inventory"]);
+
+      if (productsData is Map && productsData["products"] is List) {
+        items = List<Map<String, dynamic>>.from(productsData["products"].map((product) {
+          return {
+            "id": product["product_id"],
+            "name": product["name"],
+            "price": product["sell_price"] is List && product["sell_price"].isNotEmpty
+                ? product["sell_price"][0]
+                : (product["mrp"] ?? 0.0),
+            "quantity": product["quantity"] is List && product["quantity"].isNotEmpty
+                ? product["quantity"][0]
+                : 0.0,
+            "barcode": product["barcode"] ?? "",
+            "mrp": product["mrp"] ?? "",
+            // Optionally add more fields if needed
+          };
+        }));
       }
 
       setState(() {
@@ -140,7 +157,6 @@ class _BillingscreenState extends State<Billingscreen> {
           'discount': 0.0,
           'name': product['name'] ?? '',
           'price': _parseDouble(product['price']),
-          'description': product['description'] ?? '',
         });
       }
       _calculateTotal();
@@ -491,17 +507,6 @@ class ProductCard extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                image.isNotEmpty
-                    ? Image.network(
-                  image,
-                  height: 50,
-                  width: 50,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Image.asset('assets/images/thumbnail.png', height: 50, width: 50);
-                  },
-                )
-                    : Image.asset('assets/images/thumbnail.png', height: 50, width: 50),
                 const SizedBox(height: 8),
                 Text(
                   productName,

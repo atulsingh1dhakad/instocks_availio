@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import '../consts.dart';
 import 'createAccount.dart';
 import 'homescreen.dart';
 
@@ -196,7 +194,7 @@ class _loginscreenState extends State<loginscreen> {
                                   SizedBox(height: height * 0.02),
                                   TextField(
                                     controller: _usernameController,
-                                    keyboardType: TextInputType.text,
+                                    keyboardType: TextInputType.emailAddress,
                                     decoration: InputDecoration(
                                       fillColor: Colors.white70,
                                       filled: true,

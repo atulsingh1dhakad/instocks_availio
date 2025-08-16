@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:instockavailio/screens/profilescreen.dart';
+import 'package:instockavailio/screens/recylebin.dart';
 import 'package:instockavailio/screens/staffscreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,7 +15,7 @@ class homescreen extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter POS App',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        primarySwatch: Colors.green,
       ),
       home: POSHomeScreen(),
       debugShowCheckedModeBanner: false,
@@ -37,7 +38,8 @@ class _POSHomeScreenState extends State<POSHomeScreen> {
     InventoryScreen(),
     OrdersScreen(),
     Billingscreen(),
-    ProfileScreen(), // Use ProfileScreen()
+    ProfileScreen(),
+    recyclebin(),// Use ProfileScreen()
   ];
 
   // Function to handle menu item clicks
@@ -97,7 +99,7 @@ class _POSHomeScreenState extends State<POSHomeScreen> {
           // Side panel (fixed on the left)
           Container(
             decoration: BoxDecoration(
-              borderRadius: const BorderRadius.only(topRight: Radius.circular(40), bottomRight: Radius.circular(40)),
+              // borderRadius: const BorderRadius.only(topRight: Radius.circular(40), bottomRight: Radius.circular(40)),
               color: Colors.grey[800],
             ),
             width: 150,
@@ -126,7 +128,9 @@ class _POSHomeScreenState extends State<POSHomeScreen> {
                   SizedBox(height:25,width: 80,child:Divider(color: Colors.grey[400],height: 5,) ,),
                   _buildMenuItem('Billing', Icons.receipt_long, 4),
                   SizedBox(height:25,width: 80,child:Divider(color: Colors.grey[400],height: 5,) ,),
-                  _buildMenuItem('My Profile', Icons.person, 5), // fixed index for profile
+                  _buildMenuItem('My Profile', Icons.person, 5),
+                  SizedBox(height:25,width: 80,child:Divider(color: Colors.grey[400],height: 5,) ,),
+                  _buildMenuItem('Recyle BIN', Icons.delete_outline, 6), // // fixed index for profile
                   Padding(
                     padding: const EdgeInsets.only(top: 90),
                     child: GestureDetector(
@@ -134,10 +138,10 @@ class _POSHomeScreenState extends State<POSHomeScreen> {
                       child: Column(
                         children: [
                           Container(
-                            width: 35,
-                            height: 35,
+                            width: 45,
+                            height: 45,
                             decoration: BoxDecoration(
-                              color: Colors.blue,
+                              color: Color(0xFF05CA05),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
@@ -183,7 +187,7 @@ class _POSHomeScreenState extends State<POSHomeScreen> {
         margin: const EdgeInsets.symmetric(vertical: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.all(Radius.circular(10)),
-          color: _selectedIndex == index ? const Color(0xFFFAC1D9) : Colors.blue,
+          color: _selectedIndex == index ? Color(0xFF05CA05): Colors.white70,
         ),
         child: Center(
           child: Column(

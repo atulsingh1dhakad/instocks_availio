@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:instockavailio/screens/myinvoices.dart';
+import 'package:instockavailio/screens/orderscreen.dart';
 import 'package:instockavailio/screens/profilescreen.dart';
 import 'package:instockavailio/screens/recylebin.dart';
 import 'package:instockavailio/screens/staffscreen.dart';
@@ -29,7 +31,7 @@ class POSHomeScreen extends StatefulWidget {
 }
 
 class _POSHomeScreenState extends State<POSHomeScreen> {
-  int _selectedIndex = 0; // To keep track of the selected screen
+  int _selectedIndex = 0;
 
   // List of screens for main content
   final List<Widget> _screens = [
@@ -38,19 +40,30 @@ class _POSHomeScreenState extends State<POSHomeScreen> {
     InventoryScreen(),
     OrdersScreen(),
     Billingscreen(),
+    recyclebin(),
     ProfileScreen(),
-    recyclebin(),// Use ProfileScreen()
+    MyInvoices(),
   ];
 
-  // Function to handle menu item clicks
+  final List<Map<String, dynamic>> _menuItems = [
+    {'title': 'DashBoard', 'icon': Icons.dashboard_customize},
+    {'title': 'Staff', 'icon': Icons.people},
+    {'title': 'Inventory', 'icon': Icons.inventory},
+    {'title': 'Orders', 'icon': Icons.shopping_cart_rounded},
+    {'title': 'Billing', 'icon': Icons.receipt_long},
+    {'title': 'Recyle BIN', 'icon': Icons.delete},
+    {'title': 'My Profile', 'icon': Icons.person},
+    {'title': 'My Invoices', 'icon': Icons.receipt},
+
+  ];
+
   void _onItemTapped(int index) {
     setState(() {
-      _selectedIndex = index; // Change the selected index to navigate to the correct screen
+      _selectedIndex = index;
     });
   }
 
   Future<void> _logout(BuildContext context) async {
-    // Show confirmation dialog
     final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -71,15 +84,11 @@ class _POSHomeScreenState extends State<POSHomeScreen> {
     );
 
     if (shouldLogout == true) {
-      // Clear tokens from shared preferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('access_token');
       await prefs.remove('token_type');
       await prefs.remove('Authorization');
       await prefs.remove('user_id');
-      // You can also use prefs.clear() if you want to clear everything
-
-      // Go to login screen
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -93,120 +102,190 @@ class _POSHomeScreenState extends State<POSHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Row(
-        children: [
-          // Side panel (fixed on the left)
-          Container(
-            decoration: BoxDecoration(
-              // borderRadius: const BorderRadius.only(topRight: Radius.circular(40), bottomRight: Radius.circular(40)),
-              color: Colors.grey[800],
-            ),
-            width: 150,
-            height: double.infinity,
-            child: SingleChildScrollView(
+      backgroundColor: const Color(0xFFF7FAFC), // panel bg
+      body: SafeArea( // ✅ Protects from status bar, notches, gestures
+        child: Row(
+          children: [
+            // Side navigation panel
+            Container(
+              width: 200,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFFC9E7F8),
+                    Color(0xFFD0F3DB),
+                    Color(0xFFEFF2F6),
+                  ],
+                ),
+                borderRadius: const BorderRadius.only(
+                  topRight: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 6,
+                    offset: Offset(2, 0),
+                  ),
+                ],
+              ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // App logo + name
                   Padding(
-                    padding: const EdgeInsets.only(top: 50),
-                    child: Column(
+                    padding: const EdgeInsets.only(left: 24, top: 36, bottom: 18),
+                    child: Row(
                       children: [
-                        const Text('Availio', style: TextStyle(color: Colors.white, fontSize: 30)),
-                        const Text('Instocks', style: TextStyle(color: Colors.white, fontSize: 22)),
-                        SizedBox(height:15,width: 80,child:Divider(color: Colors.grey[400],height: 5,) ,),
+                        _buildLogoDots(),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Availio',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black87,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  // DashBoard
-                  _buildMenuItem('DashBoard', Icons.dashboard_customize, 0),
-                  SizedBox(height:25,width: 80,child:Divider(color: Colors.grey[400],height: 5,) ,),
-                  _buildMenuItem('Staff', Icons.people, 1),
-                  SizedBox(height:25,width: 80,child:Divider(color: Colors.grey[400],height: 5,) ,),
-                  _buildMenuItem('Inventory', Icons.inventory, 2),
-                  SizedBox(height:25,width: 80,child:Divider(color: Colors.grey[400],height: 5,) ,),
-                  _buildMenuItem('Orders', Icons.shopping_cart_rounded, 3),
-                  SizedBox(height:25,width: 80,child:Divider(color: Colors.grey[400],height: 5,) ,),
-                  _buildMenuItem('Billing', Icons.receipt_long, 4),
-                  SizedBox(height:25,width: 80,child:Divider(color: Colors.grey[400],height: 5,) ,),
-                  _buildMenuItem('My Profile', Icons.person, 5),
-                  SizedBox(height:25,width: 80,child:Divider(color: Colors.grey[400],height: 5,) ,),
-                  _buildMenuItem('Recyle BIN', Icons.delete_outline, 6), // // fixed index for profile
+
+                  // Navigation items
+                  ...List.generate(_menuItems.length, (index) {
+                    return _buildMenuItem(
+                      title: _menuItems[index]['title'],
+                      icon: _menuItems[index]['icon'],
+                      index: index,
+                      selected: _selectedIndex == index,
+                    );
+                  }),
+
+                  const Spacer(),
+
+                  // Logout button
                   Padding(
-                    padding: const EdgeInsets.only(top: 90),
+                    padding: const EdgeInsets.only(left: 24, bottom: 24),
                     child: GestureDetector(
                       onTap: () => _logout(context),
-                      child: Column(
+                      child: Row(
                         children: [
-                          Container(
-                            width: 45,
-                            height: 45,
-                            decoration: BoxDecoration(
-                              color: Color(0xFF05CA05),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.logout_outlined,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
+                          Icon(Icons.logout, color: Colors.red[600]),
+                          const SizedBox(width: 8),
                           const Text(
                             'Logout',
-                            style: TextStyle(color: Colors.white, fontSize: 18),
+                            style: TextStyle(color: Colors.red, fontSize: 16),
                           ),
                         ],
                       ),
                     ),
-                  )
+                  ),
                 ],
               ),
             ),
-          ),
-          // Main content area
-          Expanded(
-            child: IndexedStack(
-              index: _selectedIndex,
-              children: _screens,
+
+            // Main content area: Only the selected screen is built/active
+            Expanded(
+              child: _screens[_selectedIndex],
             ),
+          ],
+        ),
+      ),
+    );
+
+  }
+
+  Widget _buildLogoDots() {
+    // Four colored dots (top left in screenshot)
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            child: _circleDot(Colors.green),
+          ),
+          Positioned(
+            left: 14,
+            top: 0,
+            child: _circleDot(Colors.blue),
+          ),
+          Positioned(
+            left: 0,
+            top: 14,
+            child: _circleDot(Colors.purple),
+          ),
+          Positioned(
+            left: 14,
+            top: 14,
+            child: _circleDot(Colors.yellow[700]!),
           ),
         ],
       ),
     );
   }
 
-  // Helper method to build each menu item
-  GestureDetector _buildMenuItem(String title, IconData icon, int index) {
-    return GestureDetector(
-      onTap: () {
-        _onItemTapped(index);
-      },
-      child: Container(
-        height: 70,
-        width: 120,
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.all(Radius.circular(10)),
-          color: _selectedIndex == index ? Color(0xFF05CA05): Colors.white70,
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+  Widget _circleDot(Color color) {
+    return Container(
+      width: 12,
+      height: 12,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+
+  Widget _buildMenuItem({
+    required String title,
+    required IconData icon,
+    required int index,
+    required bool selected,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _onItemTapped(index),
+        child: Container(
+          height: 44,
+          decoration: BoxDecoration(
+            color: selected
+                ? Color(0xFF0C375A) // selected background
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
             children: [
-              Icon(icon, color: Colors.black),
-              Text(title, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 12),
+              Icon(
+                icon,
+                color: selected ? Colors.white : Colors.black87,
+                size: 20,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: selected ? Colors.white : Colors.black87,
+                    fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: selected ? Colors.white : Colors.grey[400],
+                size: 18,
+              ),
+              const SizedBox(width: 4),
             ],
           ),
         ),
       ),
     );
-  }
-}
-
-// Dummy Orders screen for completeness
-class OrdersScreen extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Text('Orders Screen', style: TextStyle(fontSize: 24, color: Colors.black)));
   }
 }

@@ -1,11 +1,8 @@
-import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:instockavailio/consts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 class Billingscreen extends StatefulWidget {
   const Billingscreen({Key? key}) : super(key: key);
@@ -18,26 +15,32 @@ class _BillingscreenState extends State<Billingscreen> {
   String searchQuery = "";
   List<Map<String, dynamic>> cart = [];
   double total = 0.0;
-  double overallDiscount = 0.0;
+  double tax = 0.0;
+  double subtotal = 0.0;
 
   List<Map<String, dynamic>> inventory = [];
-  bool isLoading = true;
   String? errorMessage;
 
   static const String apiToken = '0ff738d516ce887efe7274d43acd8043';
-  static const String WEB_API_URL = "https://cors-anywhere.herokuapp.com/https://avalio-api.onrender.com/";
-  static const String APP_API_URL = "https://avalio-api.onrender.com/";
-  String get apiUrl => kIsWeb ? WEB_API_URL : APP_API_URL;
+
+  String customerName = "";
+  String customerPhone = "";
+  bool customerNameSet = false;
+
+  String paymentMode = "";
+  bool isSavingInvoice = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showCustomerNameDialog();
+    });
     fetchUserAndInventory();
   }
 
   Future<void> fetchUserAndInventory() async {
     setState(() {
-      isLoading = true;
       errorMessage = null;
     });
 
@@ -46,13 +49,11 @@ class _BillingscreenState extends State<Billingscreen> {
       final String? accessToken = prefs.getString('access_token');
       final String? tokenTypeRaw = prefs.getString('token_type');
       final String tokenType = (tokenTypeRaw ?? 'Bearer').trim();
-      final String? useAccessToken =
-      accessToken != null && accessToken.trim().isNotEmpty ? accessToken.trim() : null;
-      final String authorizationHeader =
-          '${tokenType[0].toUpperCase()}${tokenType.substring(1).toLowerCase()} ${useAccessToken ?? ""}';
+      final String? useAccessToken = accessToken != null && accessToken.trim().isNotEmpty ? accessToken.trim() : null;
+      final String authorizationHeader = '${tokenType[0].toUpperCase()}${tokenType.substring(1).toLowerCase()} ${useAccessToken ?? ""}';
 
       // Fetch user info to get store_id and branch
-      final userUrl = Uri.parse('${apiUrl}users/me');
+      final userUrl = Uri.parse('${API_URL}users/me');
       final userResp = await http.get(
         userUrl,
         headers: {
@@ -64,7 +65,6 @@ class _BillingscreenState extends State<Billingscreen> {
 
       if (userResp.statusCode != 200) {
         setState(() {
-          isLoading = false;
           errorMessage = "Failed to load user data: ${userResp.statusCode}";
         });
         return;
@@ -76,15 +76,13 @@ class _BillingscreenState extends State<Billingscreen> {
 
       if (storeId == null || branch == null) {
         setState(() {
-          isLoading = false;
           errorMessage = "User's store_id or branch is missing.";
         });
         return;
       }
 
-      // Use new endpoint with params (as in Postman)
       final productsUrl = Uri.parse(
-        '${apiUrl}products/get-all-product-with-price/?store_id=$storeId&branch=$branch',
+        '${API_URL}products/get-all-product-with-price/?store_id=$storeId&branch=$branch',
       );
       final productsResp = await http.get(
         productsUrl,
@@ -97,7 +95,6 @@ class _BillingscreenState extends State<Billingscreen> {
 
       if (productsResp.statusCode != 200) {
         setState(() {
-          isLoading = false;
           errorMessage = "Failed to load products: ${productsResp.statusCode}";
         });
         return;
@@ -105,7 +102,6 @@ class _BillingscreenState extends State<Billingscreen> {
 
       final productsData = json.decode(productsResp.body);
       List<Map<String, dynamic>> items = [];
-
       if (productsData is Map && productsData["products"] is List) {
         items = List<Map<String, dynamic>>.from(productsData["products"].map((product) {
           return {
@@ -119,18 +115,17 @@ class _BillingscreenState extends State<Billingscreen> {
                 : 0.0,
             "barcode": product["barcode"] ?? "",
             "mrp": product["mrp"] ?? "",
-            // Optionally add more fields if needed
+            "image": product["image"] ?? null,
+            "category": product["category"] ?? "Uncategorized",
           };
         }));
       }
 
       setState(() {
         inventory = items;
-        isLoading = false;
       });
     } catch (e) {
       setState(() {
-        isLoading = false;
         errorMessage = "Error: $e";
       });
     }
@@ -144,116 +139,51 @@ class _BillingscreenState extends State<Billingscreen> {
 
   void _addToCart(Map<String, dynamic> product) {
     setState(() {
-      final existingItem = cart.firstWhere(
-            (item) => item['id'] == product['id'],
-        orElse: () => {},
-      );
-      if (existingItem.isNotEmpty) {
-        existingItem['quantity'] += 1;
+      final existingIndex = cart.indexWhere((item) => item['id'] == product['id']);
+      if (existingIndex >= 0) {
+        cart[existingIndex]['qty'] += 1;
       } else {
         cart.add({
           ...product,
-          'quantity': 1,
-          'discount': 0.0,
-          'name': product['name'] ?? '',
-          'price': _parseDouble(product['price']),
+          'qty': 1,
         });
       }
       _calculateTotal();
     });
   }
 
-  void _calculateTotal() {
-    total = cart.fold(
-      0.0,
-          (sum, item) {
-        final priceAfterDiscount = (_parseDouble(item['price'])) * (1 - ((item['discount'] ?? 0.0) / 100));
-        return sum + (priceAfterDiscount * (item['quantity'] ?? 1));
-      },
-    );
-    total = total * (1 - (overallDiscount / 100));
-  }
-
-  Future<void> _generateBill() async {
-    final pdf = pw.Document();
-    pdf.addPage(
-      pw.Page(
-        build: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text('POS System Bill', style: pw.TextStyle(fontSize: 24)),
-            pw.Divider(),
-            ...cart.map((item) => pw.Text(
-              "${item['name']} x${item['quantity']} - ₹${_parseDouble(item['price']).toStringAsFixed(2)} (${item['discount']}% discount)",
-            )),
-            pw.Divider(),
-            pw.Text(
-              "Overall Discount: ${overallDiscount.toStringAsFixed(2)}%",
-            ),
-            pw.Text("Total: ₹${total.toStringAsFixed(2)}"),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final output = await getApplicationDocumentsDirectory();
-      final file = File("${output.path}/bill.pdf");
-      await file.writeAsBytes(await pdf.save());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Bill saved to ${file.path}")),
-      );
-      setState(() {
-        cart.clear();
-        total = 0.0;
-        overallDiscount = 0.0;
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
-    }
-  }
-
-  void _showDiscountDialog(Map<String, dynamic> product) {
-    final TextEditingController discountController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text("Add Discount to ${product['name']}"),
-          content: TextField(
-            controller: discountController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(hintText: "Enter discount in %"),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  final discount = double.tryParse(discountController.text) ?? 0.0;
-                  product['discount'] = discount;
-                  _calculateTotal();
-                });
-                Navigator.of(context).pop();
-              },
-              child: const Text("Apply"),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _removeFromCart(Map<String, dynamic> item) {
+  void _increaseQty(int index) {
     setState(() {
-      cart.removeWhere((cartItem) => cartItem['id'] == item['id']);
+      cart[index]['qty'] += 1;
       _calculateTotal();
     });
+  }
+
+  void _decreaseQty(int index) {
+    setState(() {
+      if (cart[index]['qty'] > 1) {
+        cart[index]['qty'] -= 1;
+      } else {
+        cart.removeAt(index);
+      }
+      _calculateTotal();
+    });
+  }
+
+  void _removeFromCart(int index) {
+    setState(() {
+      cart.removeAt(index);
+      _calculateTotal();
+    });
+  }
+
+  void _calculateTotal() {
+    subtotal = cart.fold(
+      0.0,
+          (sum, item) => sum + (_parseDouble(item['price']) * (item['qty'] ?? 1)),
+    );
+    tax = subtotal * 0.044; // 4.4% tax as example
+    total = subtotal + tax;
   }
 
   double _parseDouble(dynamic value) {
@@ -264,203 +194,240 @@ class _BillingscreenState extends State<Billingscreen> {
     return 0.0;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-    if (errorMessage != null) {
-      return Scaffold(
-        body: Center(child: Text(errorMessage!, style: const TextStyle(color: Colors.red))),
-      );
-    }
-    final double screenWidth = MediaQuery.of(context).size.width;
-    int crossAxisCount = 4;
-    if (screenWidth > 1400) {
-      crossAxisCount = 7;
-    } else if (screenWidth > 1200) {
-      crossAxisCount = 6;
-    } else if (screenWidth > 900) {
-      crossAxisCount = 5;
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('POS System'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: fetchUserAndInventory,
+  // Show customer name and phone dialog at start or if customer name is empty
+  void _showCustomerNameDialog({String error = ""}) {
+    String tempCustomerName = "";
+    String tempCustomerPhone = "";
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Enter Customer Details"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                autofocus: true,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: "Customer Name",
+                ),
+                onChanged: (val) {
+                  tempCustomerName = val;
+                },
+                onSubmitted: (_) {},
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: "Phone Number (optional)",
+                ),
+                onChanged: (val) {
+                  tempCustomerPhone = val;
+                },
+                onSubmitted: (_) {},
+              ),
+              if (error.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(error, style: const TextStyle(color: Colors.red)),
+              ]
+            ],
           ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              onChanged: (value) {
+          actions: [
+            TextButton(
+              onPressed: () {
+                if (tempCustomerName.trim().isNotEmpty) {
+                  Navigator.of(context, rootNavigator: true).pop();
+                  setState(() {
+                    customerName = tempCustomerName.trim();
+                    customerPhone = tempCustomerPhone.trim();
+                    customerNameSet = true;
+                  });
+                }
+              },
+              child: const Text("Save"),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context, rootNavigator: true).pop();
+              },
+              child: const Text("Cancel"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Payment mode selector
+  Widget _paymentModeButtons() {
+    final modes = ["cash", "UPI", "card"];
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: modes.map((mode) {
+        final selected = paymentMode == mode;
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: selected ? Colors.blue : Colors.grey[300],
+                foregroundColor: selected ? Colors.white : Colors.black,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              onPressed: () {
                 setState(() {
-                  searchQuery = value.toLowerCase();
+                  paymentMode = mode;
                 });
               },
-              decoration: InputDecoration(
-                hintText: "Search products...",
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8.0),
+              child: Text(mode.toUpperCase()),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // Cart Preview Panel (now on the right)
+  Widget _cartPreview() {
+    return Container(
+      width: 340,
+      color: Colors.white,
+      child: Column(
+        children: [
+          Container(
+            color: Colors.green[500],
+            height: 52,
+            child: Row(
+              children: [
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  onPressed: cart.isNotEmpty ? () => setState(() => cart.clear()) : null,
+                  icon: const Icon(Icons.delete, color: Colors.white, size: 18),
+                  label: const Text('Delete', style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red[600],
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0)),
+                ),
+                const Spacer(),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20,),
+          Text(
+            customerName.isEmpty
+                ? 'Billing for: ______'
+                : 'Billing for: $customerName',
+            style: const TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+              fontSize:20,
+            ),
+          ),
+          if (customerPhone.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: Text(
+                'Phone: $customerPhone',
+                style: const TextStyle(
+                  color: Colors.grey,
+                  fontSize: 15,
                 ),
               ),
             ),
-          ),
           Expanded(
-            child: Row(
+            child: ListView.builder(
+              itemCount: cart.length,
+              itemBuilder: (context, idx) {
+                final item = cart[idx];
+                return Container(
+                  decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                  ),
+                  child: ListTile(
+                    dense: true,
+                    minVerticalPadding: 0,
+                    leading: CircleAvatar(radius: 14, child: Text('${item['qty']}')),
+                    title: Text(item['name'], style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+                    subtitle: Text('ID: ${item['id']}'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('${_parseDouble(item['price']).toStringAsFixed(2)}', style: TextStyle(fontSize: 14)),
+                        IconButton(
+                          icon: Icon(Icons.remove, size: 18),
+                          onPressed: () => _decreaseQty(idx),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.add, size: 18),
+                          onPressed: () => _increaseQty(idx),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Divider(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Column(
               children: [
-                Expanded(
-                  flex: 3,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Product Catalog',
-                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                        ),
-                        Expanded(
-                          child: GridView.builder(
-                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: crossAxisCount,
-                              mainAxisSpacing: 8,
-                              crossAxisSpacing: 8,
-                              childAspectRatio: 1.0,
-                            ),
-                            itemCount: filteredInventory.length,
-                            itemBuilder: (context, index) {
-                              final product = filteredInventory[index];
-                              return GestureDetector(
-                                onTap: () => _addToCart(product),
-                                child: ProductCard(
-                                  productName: product["name"] ?? "",
-                                  price: _parseDouble(product["price"]),
-                                  image: product["image"] ?? "",
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
+                _billRow("Subtotal", subtotal.toStringAsFixed(2)),
+                _billRow("Tax", tax.toStringAsFixed(2)),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Total', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    Text(total.toStringAsFixed(2), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _paymentModeButtons(),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: cart.isNotEmpty && paymentMode.isNotEmpty && !isSavingInvoice
+                        ? _handleProceedButton
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[900],
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: isSavingInvoice
+                        ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                        : Text(
+                      paymentMode.isEmpty
+                          ? "Select Payment Mode"
+                          : "Proceed",
+                      style: const TextStyle(color: Colors.white),
                     ),
                   ),
                 ),
-                Expanded(
-                  flex: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Cart',
-                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                        ),
-                        Expanded(
-                          child: ListView.builder(
-                            itemCount: cart.length,
-                            itemBuilder: (context, index) {
-                              final item = cart[index];
-                              return ListTile(
-                                title: Text(item['name'] ?? ""),
-                                subtitle: Row(
-                                  children: [
-                                    Text("Discount: ${item['discount'] ?? 0}%"),
-                                    const SizedBox(width: 16),
-                                    DropdownButton<int>(
-                                      value: item['quantity'],
-                                      items: List.generate(
-                                        10,
-                                            (index) => DropdownMenuItem(
-                                          value: index + 1,
-                                          child: Text("${index + 1}"),
-                                        ),
-                                      ),
-                                      onChanged: (value) {
-                                        if (value != null) {
-                                          setState(() {
-                                            item['quantity'] = value;
-                                            _calculateTotal();
-                                          });
-                                        }
-                                      },
-                                    ),
-                                  ],
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.percent),
-                                      onPressed: () => _showDiscountDialog(item),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete),
-                                      onPressed: () => _removeFromCart(item),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        Divider(),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Total: ₹${total.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            ElevatedButton(
-                              onPressed: _generateBill,
-                              child: const Text('Checkout'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            const Text(
-                              'Apply Discount (%)',
-                              style: TextStyle(fontSize: 18),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 80,
-                              child: TextField(
-                                keyboardType: TextInputType.number,
-                                onChanged: (value) {
-                                  setState(() {
-                                    overallDiscount = double.tryParse(value) ?? 0.0;
-                                    _calculateTotal();
-                                  });
-                                },
-                                decoration: const InputDecoration(
-                                  hintText: '0',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                if (cart.isNotEmpty && paymentMode.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      "Please select a payment mode.",
+                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -468,62 +435,274 @@ class _BillingscreenState extends State<Billingscreen> {
       ),
     );
   }
-}
 
-class ProductCard extends StatelessWidget {
-  final String productName;
-  final double price;
-  final String image;
+  void _handleProceedButton() {
+    if (customerName.trim().isEmpty) {
+      _showCustomerNameDialog(error: "Customer name is required.");
+      return;
+    }
+    _proceedInvoice();
+  }
 
-  const ProductCard({
-    required this.productName,
-    required this.price,
-    required this.image,
-    Key? key,
-  }) : super(key: key);
+  Future<void> _proceedInvoice() async {
+    setState(() => isSavingInvoice = true);
 
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      elevation: 4,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300, width: 1),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 6,
-              spreadRadius: 1,
-              offset: Offset(0, 2),
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? accessToken = prefs.getString('access_token');
+      final String? tokenTypeRaw = prefs.getString('token_type');
+      final String tokenType = (tokenTypeRaw ?? 'Bearer').trim();
+      final String? useAccessToken = accessToken != null && accessToken.trim().isNotEmpty ? accessToken.trim() : null;
+      final String authorizationHeader = '${tokenType[0].toUpperCase()}${tokenType.substring(1).toLowerCase()} ${useAccessToken ?? ""}';
+
+      final String date = DateTime.now().toIso8601String();
+      final String notes = ""; // Add notes from UI if needed
+      final String counterId = "C1"; // Replace with actual counter id from user/session
+
+      final items = cart.map((item) => {
+        "product_id": item['id'],
+        "qty_used": item['qty'],
+        "price_used": _parseDouble(item['price']),
+      }).toList();
+
+      // If phone is empty, send 0 (int), else parse to int (fallback to 0 if not valid)
+      dynamic phoneToSend;
+      if (customerPhone.trim().isEmpty) {
+        phoneToSend = 0;
+      } else {
+        phoneToSend = int.tryParse(customerPhone.trim()) ?? 0;
+      }
+
+      final invoiceBody = {
+        "date": date,
+        "customer_name": customerName,
+        "phone": phoneToSend,
+        "items": items,
+        "total": total,
+        "payment_mode": paymentMode,
+        "notes": notes,
+        "counter_id": counterId,
+      };
+
+      final url = Uri.parse('${API_URL}invoices/generate-invoice/');
+      final resp = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-token': apiToken,
+          'Authorization': authorizationHeader,
+        },
+        body: jsonEncode(invoiceBody),
+      );
+
+      setState(() => isSavingInvoice = false);
+
+      if (resp.statusCode == 200 || resp.statusCode == 201) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Invoice Generated'),
+            content: const Text('Invoice was generated successfully!'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context, rootNavigator: true).pop();
+                  setState(() {
+                    cart.clear();
+                    _calculateTotal();
+                    errorMessage = null;
+                    customerName = "";
+                    customerPhone = "";
+                    customerNameSet = false;
+                  });
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _showCustomerNameDialog();
+                  });
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Error'),
+            content: Text('Failed to generate invoice. Status: ${resp.statusCode}\n${resp.body}'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => isSavingInvoice = false);
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Error'),
+          content: Text('Error generating invoice: $e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+              child: const Text('OK'),
             ),
           ],
         ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(10.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+      );
+    }
+  }
+
+  Widget _productGrid() {
+    return Expanded(
+      child: Column(
+        children: [
+          Container(
+            height: 52,
+            color: Colors.white,
+            child: Row(
               children: [
-                const SizedBox(height: 8),
-                Text(
-                  productName,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
+                IconButton(icon: Icon(Icons.settings), onPressed: () {}),
+                IconButton(icon: Icon(Icons.view_list), onPressed: () {}),
+                IconButton(icon: Icon(Icons.grid_view), onPressed: () {}),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: TextField(
+                      onChanged: (value) {
+                        setState(() {
+                          searchQuery = value.toLowerCase();
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: "Search products by name, code or barcode",
+                        border: InputBorder.none,
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        contentPadding: EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                      ),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  '₹${price.toStringAsFixed(2)}',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-                  textAlign: TextAlign.center,
-                ),
+                IconButton(icon: Icon(Icons.search), onPressed: () {}),
               ],
             ),
           ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+              child: GridView.builder(
+                itemCount: filteredInventory.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  childAspectRatio: 1.1,
+                ),
+                itemBuilder: (context, idx) {
+                  final prod = filteredInventory[idx];
+                  return GestureDetector(
+                    onTap: () => _addToCart(prod),
+                    child: Card(
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            height: 36,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: _categoryColor(prod['category']),
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+                            ),
+                            child: Center(
+                              child: Text(
+                                prod['category'] ?? '',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: prod['image'] != null
+                                ? Image.network(prod['image'], height: 48, fit: BoxFit.contain)
+                                : Icon(Icons.fastfood, size: 48, color: Colors.grey[400]),
+                          ),
+                          Text(prod['name'], style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text(_parseDouble(prod['price']).toStringAsFixed(2),
+                              style: TextStyle(fontSize: 13, color: Colors.grey[700])),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          Container(
+            height: 42,
+            color: Colors.white,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text("Page 1 / 1", style: TextStyle(color: Colors.grey[700])),
+                IconButton(icon: Icon(Icons.home, color: Colors.grey[600]), onPressed: () {}),
+                IconButton(icon: Icon(Icons.arrow_back_ios, color: Colors.grey[600]), onPressed: () {}),
+                IconButton(icon: Icon(Icons.arrow_forward_ios, color: Colors.grey[600]), onPressed: () {}),
+                SizedBox(width: 18),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _categoryColor(String? category) {
+    switch (category) {
+      case 'Drink':
+        return Colors.blue;
+      case 'Food':
+        return Colors.deepPurple;
+      case 'Breakfast':
+        return Colors.brown;
+      case 'Salad':
+        return Colors.orange;
+      default:
+        return Colors.grey[400]!;
+    }
+  }
+
+  Widget _billRow(String label, String value, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.normal, fontSize: 15)),
+          Text(value, style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.normal, fontSize: 15)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (errorMessage != null) {
+      return Scaffold(body: Center(child: Text(errorMessage!, style: const TextStyle(color: Colors.red))));
+    }
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7FAF7),
+      body: SafeArea(
+        child: Row(
+          children: [
+            _productGrid(),
+            _cartPreview(),
+          ],
         ),
       ),
     );

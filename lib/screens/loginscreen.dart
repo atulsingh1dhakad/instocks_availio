@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:instockavailio/consts.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'createAccount.dart';
@@ -19,15 +20,8 @@ class _loginscreenState extends State<loginscreen> {
 
   bool _isLoading = false;
   String? _error;
+  bool _rememberMe = false;
 
-  String getApiUrl() {
-    // Use CORS proxy for web, direct API for mobile/desktop
-    if (kIsWeb) {
-      return "https://cors-anywhere.herokuapp.com/https://avalio-api.onrender.com/";
-    } else {
-      return "https://avalio-api.onrender.com/";
-    }
-  }
 
   Future<void> _loginUser() async {
     setState(() {
@@ -36,7 +30,7 @@ class _loginscreenState extends State<loginscreen> {
     });
 
     final String apiKey = '0ff738d516ce887efe7274d43acd8043';
-    final String apiUrl = getApiUrl();
+    final String apiUrl = API_URL;
     final url = Uri.parse('${apiUrl}users/login');
 
     try {
@@ -44,7 +38,7 @@ class _loginscreenState extends State<loginscreen> {
         url,
         headers: {
           'Content-Type': 'application/json',
-          'x-api-token': apiKey, // FIXED header name to match backend expectation
+          'x-api-token': apiKey,
         },
         body: jsonEncode({
           'email_or_phone': _usernameController.text.trim(),
@@ -52,17 +46,12 @@ class _loginscreenState extends State<loginscreen> {
         }),
       );
 
-      print('Status code: ${response.statusCode}');
-      print('Response body: ${response.body}');
-
       Map<String, dynamic> data = {};
       bool jsonDecodeSuccess = false;
       try {
         data = json.decode(response.body);
         jsonDecodeSuccess = true;
-      } catch (_) {
-        // Non-JSON response handling below
-      }
+      } catch (_) {}
 
       if (response.statusCode == 200 &&
           jsonDecodeSuccess &&
@@ -90,7 +79,6 @@ class _loginscreenState extends State<loginscreen> {
         setState(() {
           String backendError = '';
           if (!jsonDecodeSuccess) {
-            // Check for HTML error page
             if (response.body.trim().startsWith('<')) {
               backendError =
               'Received an unexpected server response (possibly an HTML error page from a proxy or CORS server).';
@@ -133,208 +121,223 @@ class _loginscreenState extends State<loginscreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final width = size.width;
-    final height = size.height;
 
-    return SafeArea(
-      child: Scaffold(
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.asset(
-              'assets/images/bgbanner.jpg',
-              fit: BoxFit.cover,
-              width: width,
-              height: height,
-            ),
-            SingleChildScrollView(
-              child: Center(
-                child: Column(
-                  children: [
-                    SizedBox(height: height * 0.02),
-                    Image.asset(
-                      'assets/images/logo2.png',
-                      width: width * 0.2,
-                      height: height * 0.09,
-                    ),
-                    SizedBox(height: height * 0.08),
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: width * 0.05,
-                        vertical: height * 0.01,
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.0, -0.15),
+            radius: 1.0,
+            colors: [
+              Color(0xFFC9E7F8),
+              Color(0xFFD0F3DB),
+              Color(0xFFEFF2F6),
+            ],
+            stops: [0.1, 0.6, 1.0],
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                const SizedBox(height: 40),
+                Icon(
+                  Icons.storefront_outlined,
+                  size: 80,
+                  color: Colors.black87,
+                ),
+                const SizedBox(height: 32),
+                Text(
+                  'POS Login',
+                  style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                    letterSpacing: -1.2,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Manage your store with ease',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.black54,
+                    fontWeight: FontWeight.normal,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 36),
+                // Login Card
+                Container(
+                  width: size.width < 500 ? size.width * 0.97 : 430,
+                  padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 30),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(26),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 16,
+                        offset: Offset(0, 6),
                       ),
-                      child: Container(
-                        constraints: BoxConstraints(
-                          maxWidth: 500,
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _usernameController,
+                        decoration: InputDecoration(
+                          hintText: "Email  / phone number",
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(22),
+                            borderSide: BorderSide(color: Colors.black12, width: 1.3),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(22),
+                            borderSide: BorderSide(color: Colors.black12, width: 1.3),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(22),
+                            borderSide: BorderSide(color: Colors.blueAccent, width: 1.9),
+                          ),
                         ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.rectangle,
-                          borderRadius: BorderRadius.all(Radius.circular(10)),
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      const SizedBox(height: 18),
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          hintText: "Password",
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(22),
+                            borderSide: BorderSide(color: Colors.black12, width: 1.3),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(22),
+                            borderSide: BorderSide(color: Colors.black12, width: 1.3),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(22),
+                            borderSide: BorderSide(color: Colors.blueAccent, width: 1.9),
+                          ),
                         ),
-                        child: Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(width * 0.05),
-                            child: SingleChildScrollView(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Center(
-                                    child: Text(
-                                      'Login With ID and Password',
-                                      style: TextStyle(
-                                        fontFamily: 'opensans',
-                                        fontSize: width * 0.012,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xff280071),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(height: height * 0.02),
-                                  TextField(
-                                    controller: _usernameController,
-                                    keyboardType: TextInputType.emailAddress,
-                                    decoration: InputDecoration(
-                                      fillColor: Colors.white70,
-                                      filled: true,
-                                      prefixIcon: Icon(Icons.person),
-                                      hintText: 'Enter Email or Phone Number',
-                                      hintStyle: TextStyle(
-                                        fontWeight: FontWeight.w400,
-                                      ),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                        borderSide: BorderSide(color: Colors.grey),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(color: Color(0xff280071)),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(height: height * 0.012),
-                                  Text(
-                                    'Password',
-                                    style: TextStyle(fontSize: width * 0.012),
-                                  ),
-                                  TextField(
-                                    controller: _passwordController,
-                                    obscureText: true,
-                                    decoration: InputDecoration(
-                                      fillColor: Colors.white70,
-                                      filled: true,
-                                      prefixIcon: Icon(Icons.lock),
-                                      hintText: 'Enter Your Password',
-                                      hintStyle: TextStyle(
-                                        fontWeight: FontWeight.w400,
-                                      ),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                        borderSide: BorderSide(color: Colors.grey),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(color: Color(0xff280071)),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ),
-                                  ),
-                                  if (_error != null) ...[
-                                    SizedBox(height: height * 0.012),
-                                    Center(
-                                      child: Text(
-                                        _error!,
-                                        style: TextStyle(color: Colors.red, fontSize: 14),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                  ],
-                                  SizedBox(height: height * 0.04),
-                                  Center(
-                                    child: _isLoading
-                                        ? CircularProgressIndicator()
-                                        : ElevatedButton(
-                                      onPressed: _loginUser,
-                                      style: ElevatedButton.styleFrom(
-                                        minimumSize: Size(320, 54),
-                                        shadowColor: Colors.black,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        backgroundColor: Color(0xff663390),
-                                        padding: EdgeInsets.symmetric(horizontal: 16),
-                                        textStyle: TextStyle(fontSize: 20),
-                                      ),
-                                      child: Text(
-                                        'Login',
-                                        style: TextStyle(color: Colors.white, fontSize: 14),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(height: height * 0.04),
-                                  Center(
-                                    child: GestureDetector(
-                                        onTap: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) => const createAccount(),
-                                            ),
-                                          );
-                                        },
-                                        child: Column(
-                                          children: [
-                                            Text(
-                                              "Don't have an account?",
-                                              style: TextStyle(
-                                                fontFamily: 'opensans',
-                                                fontSize: width * 0.009,
-                                                fontWeight: FontWeight.bold,
-                                                color: Color(0xff280071),
-                                                decoration: TextDecoration.underline,
-                                              ),
-                                            ),
-                                            Text(
-                                              "Create Account",
-                                              style: TextStyle(
-                                                fontFamily: 'opensans',
-                                                fontSize: width * 0.009,
-                                                fontWeight: FontWeight.bold,
-                                                color: Color(0xff280071),
-                                                decoration: TextDecoration.underline,
-                                              ),
-                                            ),
-                                          ],
-                                        )
-                                    ),
-                                  ),
-                                  SizedBox(height: height * 0.02),
-                                  Center(
-                                    child: GestureDetector(
-                                      onTap: () {},
-                                      child: Text(
-                                        'T&C applied',
-                                        style: TextStyle(
-                                          fontFamily: 'opensans',
-                                          fontSize: width * 0.012,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xff280071),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      const SizedBox(height: 10),
+                      // Remember me checkbox below password
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: _rememberMe,
+                            onChanged: (val) {
+                              setState(() {
+                                _rememberMe = val ?? false;
+                              });
+                            },
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+                            activeColor: Colors.blueAccent,
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          const Text(
+                            'Remember me',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: _isLoading
+                            ? Center(child: CircularProgressIndicator())
+                            : ElevatedButton(
+                          onPressed: _loginUser,
+                          style: ElevatedButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                            elevation: 0,
+                            backgroundColor: Colors.transparent,
+                          ),
+                          child: Ink(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Color(0xFFB6F5C9),
+                                  Color(0xFFBEE7FF),
                                 ],
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                              ),
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                            child: Container(
+                              alignment: Alignment.center,
+                              child: Text(
+                                'Login',
+                                style: TextStyle(
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 20,
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      GestureDetector(
+                        onTap: () {},
+                        child: Text(
+                          'Forgot password?',
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.black87,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 10),
+                        Center(
+                          child: Text(
+                            _error!,
+                            style: TextStyle(color: Colors.red, fontSize: 14),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
+                const SizedBox(height: 24),
+                Text(
+                  'New store? Register here.',
+                  style: TextStyle(
+                    fontSize: 17,
+                    color: Colors.black87,
+                    decoration: TextDecoration.none,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 14),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

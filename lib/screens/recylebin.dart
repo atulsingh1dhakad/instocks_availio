@@ -1,12 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:instockavailio/consts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 // Configurable API variables
-const String apiUrlWeb = "https://cors-anywhere.herokuapp.com/https://avalio-api.onrender.com/";
-const String apiUrlApp = "https://avalio-api.onrender.com/";
 const String xApiTokenHeader = "x-api-token";
 const String apiToken = '0ff738d516ce887efe7274d43acd8043';
 
@@ -22,7 +21,6 @@ class _recyclebinState extends State<recyclebin> {
   bool isLoading = true;
   String? errorMessage;
 
-  String get apiUrl => kIsWeb ? apiUrlWeb : apiUrlApp;
 
   @override
   void initState() {
@@ -56,7 +54,7 @@ class _recyclebinState extends State<recyclebin> {
     });
     try {
       final headers = await _getAuthHeaders();
-      final url = Uri.parse('${apiUrl}products/recycle-bin');
+      final url = Uri.parse('${API_URL}products/recycle-bin');
       final resp = await http.get(url, headers: headers);
       if (resp.statusCode == 200) {
         final data = json.decode(resp.body);
@@ -87,7 +85,7 @@ class _recyclebinState extends State<recyclebin> {
   Future<void> restoreProduct(int productId) async {
     final headers = await _getAuthHeaders();
     try {
-      final url = Uri.parse('${apiUrl}products/undel-prod');
+      final url = Uri.parse('${API_URL}products/undel-prod');
       final resp = await http.post(
         url,
         headers: headers,
@@ -127,7 +125,7 @@ class _recyclebinState extends State<recyclebin> {
   Future<void> deleteProduct(int productId) async {
     final headers = await _getAuthHeaders();
     try {
-      final url = Uri.parse('${apiUrl}products/per-del-prod');
+      final url = Uri.parse('${API_URL}products/per-del-prod');
       final resp = await http.delete(
         url,
         headers: headers,
@@ -166,7 +164,7 @@ class _recyclebinState extends State<recyclebin> {
   Future<void> deleteAllProducts() async {
     final headers = await _getAuthHeaders();
     try {
-      final url = Uri.parse('${apiUrl}products/per-del-all-prod');
+      final url = Uri.parse('${API_URL}products/per-del-all-prod');
       final resp = await http.delete(
         url,
         headers: headers,
@@ -282,9 +280,15 @@ class _recyclebinState extends State<recyclebin> {
           child: Text(errorMessage!,
               style: const TextStyle(color: Colors.red)))
           : binProducts.isEmpty
-          ? const Center(
-          child: Text('No products in recycle bin.',
-              style: TextStyle(color: Colors.black)))
+          ? Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Image.asset('assets/images/emptybin.png',width: 120 ,),
+              const Text('No products in recycle bin.',
+                  style: TextStyle(color: Colors.black,)),
+            ],
+          ))
           : ListView.builder(
         itemCount: binProducts.length,
         itemBuilder: (context, index) {

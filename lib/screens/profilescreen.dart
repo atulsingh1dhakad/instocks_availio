@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:instockavailio/consts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -44,14 +45,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // API KEY and URLs
   static const String apiToken = '0ff738d516ce887efe7274d43acd8043';
-  static const String WEB_API_URL = "https://cors-anywhere.herokuapp.com/https://avalio-api.onrender.com/";
-  static const String APP_API_URL = "https://avalio-api.onrender.com/";
-  String get apiUrl => kIsWeb ? WEB_API_URL : APP_API_URL;
 
   @override
   void initState() {
     super.initState();
     _profileFuture = fetchUserProfile();
+  }
+
+  /// Save all profile info to SharedPreferences
+  Future<void> saveProfileToPrefs(Map<String, dynamic> userJson) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final entry in userJson.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if (value is String) {
+        await prefs.setString(key, value);
+      } else if (value is int) {
+        await prefs.setInt(key, value);
+      } else if (value is double) {
+        await prefs.setDouble(key, value);
+      } else if (value is bool) {
+        await prefs.setBool(key, value);
+      } else if (value is List) {
+        // Save lists as JSON string
+        await prefs.setString(key, jsonEncode(value));
+      } else if (value == null) {
+        await prefs.remove(key);
+      } else {
+        await prefs.setString(key, value.toString());
+      }
+    }
   }
 
   Future<UserProfile?> fetchUserProfile() async {
@@ -64,7 +87,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final String authorizationHeader =
         '${tokenType[0].toUpperCase()}${tokenType.substring(1).toLowerCase()} ${useAccessToken ?? ""}';
 
-    final url = Uri.parse('${apiUrl}users/me');
+    final url = Uri.parse('${API_URL}users/me');
 
     debugPrint('==== PROFILE FETCH DEBUG ====');
     debugPrint('accessToken: $accessToken');
@@ -88,6 +111,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (response.statusCode == 200) {
       try {
         final Map<String, dynamic> userJson = json.decode(response.body);
+
+        // Save all profile info into SharedPreferences
+        await saveProfileToPrefs(userJson);
+
         return UserProfile.fromJson(userJson);
       } catch (e) {
         debugPrint("JSON decode error: $e");

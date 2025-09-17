@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:instockavailio/consts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'addnewproduct.dart';
@@ -43,10 +44,7 @@ class _InventoryScreenState extends State<InventoryScreen>
   List<Category> categories = [];
   Category? selectedCategory;
 
-  static const String WEB_API_URL =
-      "https://cors-anywhere.herokuapp.com/https://avalio-api.onrender.com/";
-  static const String APP_API_URL = "https://avalio-api.onrender.com/";
-  String get apiUrl => kIsWeb ? WEB_API_URL : APP_API_URL;
+
   static const String apiToken = '0ff738d516ce887efe7274d43acd8043';
 
   @override
@@ -107,7 +105,7 @@ class _InventoryScreenState extends State<InventoryScreen>
     try {
       final headers = await _getAuthHeaders();
 
-      final userUrl = Uri.parse('${apiUrl}users/me');
+      final userUrl = Uri.parse('${API_URL}users/me');
       final userResp = await http.get(
         userUrl,
         headers: headers,
@@ -133,7 +131,7 @@ class _InventoryScreenState extends State<InventoryScreen>
         return;
       }
 
-      final invUrl = Uri.parse('${apiUrl}store/inventory/$storeId/$branch');
+      final invUrl = Uri.parse('${API_URL}store/inventory/$storeId/$branch');
       final invResp = await http.get(
         invUrl,
         headers: headers,
@@ -170,7 +168,7 @@ class _InventoryScreenState extends State<InventoryScreen>
   Future<void> fetchCategories() async {
     try {
       final headers = await _getAuthHeaders();
-      final url = Uri.parse('${apiUrl}category');
+      final url = Uri.parse('${API_URL}category');
       final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
@@ -197,31 +195,25 @@ class _InventoryScreenState extends State<InventoryScreen>
     TextEditingController(text: product?["name"] ?? "");
     final TextEditingController descriptionController =
     TextEditingController(text: product?["description"] ?? "");
-    final TextEditingController buyPriceController = TextEditingController(
-        text: (product?["buy_price"] is List && product!["buy_price"].isNotEmpty)
-            ? product["buy_price"][0].toString()
-            : "");
-    final TextEditingController sellPriceController = TextEditingController(
-        text: (product?["sell_price"] is List && product!["sell_price"].isNotEmpty)
-            ? product["sell_price"][0].toString()
-            : "");
-    final TextEditingController quantityController = TextEditingController(
-        text: (product?["quantity"] is List && product!["quantity"].isNotEmpty)
-            ? product["quantity"][0].toString()
-            : "");
     final TextEditingController unitController =
     TextEditingController(text: product?["unit"] ?? "");
     final TextEditingController skuController =
     TextEditingController(text: product?["sku"] ?? "");
 
+    bool onlineVisibility = product?["online_visibility"] ?? true;
+
     Category _selectedCategory;
     if (isEdit && product?["category"] != null) {
       _selectedCategory = categories.firstWhere(
             (cat) => cat.categoryId == product?["category"],
-        orElse: () => Category(id: "", name: "", description: "", categoryId: 0),
+        orElse: () =>
+            Category(id: "", name: "", description: "", categoryId: 0),
       );
     } else {
-      _selectedCategory = selectedCategory ?? (categories.isNotEmpty ? categories[0] : Category(id: "", name: "", description: "", categoryId: 0));
+      _selectedCategory = selectedCategory ??
+          (categories.isNotEmpty
+              ? categories[0]
+              : Category(id: "", name: "", description: "", categoryId: 0));
     }
 
     showDialog(
@@ -232,9 +224,6 @@ class _InventoryScreenState extends State<InventoryScreen>
           builder: (context, setStateDialog) {
             Future<void> handleAction() async {
               if (nameController.text.isNotEmpty &&
-                  buyPriceController.text.isNotEmpty &&
-                  sellPriceController.text.isNotEmpty &&
-                  quantityController.text.isNotEmpty &&
                   _selectedCategory.categoryId != 0 &&
                   storeId != null &&
                   branch != null) {
@@ -242,36 +231,23 @@ class _InventoryScreenState extends State<InventoryScreen>
                 try {
                   final headers = await _getAuthHeaders();
                   final Map<String, dynamic> payload = {
+                    "product_id": product?["product_id"],
                     "name": nameController.text,
                     "category": _selectedCategory.categoryId,
-                    "buy_price": [
-                      double.tryParse(buyPriceController.text) ?? 0.0
-                    ],
-                    "sell_price": [
-                      double.tryParse(sellPriceController.text) ?? 0.0
-                    ],
                     "store_id": storeId,
                     "branch": branch,
-                    "quantity": [
-                      int.tryParse(quantityController.text) ?? 1
-                    ],
+                    "online_visibility": onlineVisibility,
                     "unit": unitController.text,
                     "description": descriptionController.text,
-                    "sku": skuController.text,
                   };
 
-                  Uri url;
-                  http.Response resp;
-                  if (isEdit && product != null && product["product_id"] != null) {
-                    url = Uri.parse('${apiUrl}products/update/${product["product_id"]}');
-                    resp = await http.put(
-                      url,
-                      headers: headers,
-                      body: jsonEncode(payload),
-                    );
-                  } else {
-                    throw Exception('Add product not allowed here');
-                  }
+                  // Use PUT and base update endpoint; don't concatenate product_id
+                  final url = Uri.parse('${API_URL}products/update');
+                  final resp = await http.put(
+                    url,
+                    headers: headers,
+                    body: jsonEncode(payload),
+                  );
 
                   setStateDialog(() {
                     _isEditingProduct = false;
@@ -311,7 +287,8 @@ class _InventoryScreenState extends State<InventoryScreen>
                 }
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Please fill in all fields with valid data")),
+                  const SnackBar(
+                      content: Text("Please fill in all required fields")),
                 );
               }
             }
@@ -350,15 +327,23 @@ class _InventoryScreenState extends State<InventoryScreen>
                         ),
                       ),
                       const SizedBox(height: 16),
-                      _buildTextField(buyPriceController, "Buy Price", keyboardType: TextInputType.number),
-                      const SizedBox(height: 16),
-                      _buildTextField(sellPriceController, "Sell Price", keyboardType: TextInputType.number),
-                      const SizedBox(height: 16),
-                      _buildTextField(quantityController, "Quantity", keyboardType: TextInputType.number),
-                      const SizedBox(height: 16),
                       _buildTextField(unitController, "Unit"),
                       const SizedBox(height: 16),
                       _buildTextField(skuController, "SKU"),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: onlineVisibility,
+                            onChanged: (val) {
+                              setStateDialog(() {
+                                onlineVisibility = val ?? true;
+                              });
+                            },
+                          ),
+                          const Text("Online Visibility", style: TextStyle(color: Colors.black)),
+                        ],
+                      ),
                       const SizedBox(height: 16),
                       if (_isEditingProduct)
                         const Padding(
@@ -412,7 +397,7 @@ class _InventoryScreenState extends State<InventoryScreen>
   Future<void> _deleteProduct(int productId) async {
     final headers = await _getAuthHeaders();
     try {
-      final url = Uri.parse('${apiUrl}products/del-prod');
+      final url = Uri.parse('${API_URL}products/del-prod');
       final resp = await http.post(
         url,
         headers: headers,
@@ -455,7 +440,8 @@ class _InventoryScreenState extends State<InventoryScreen>
     if (catId == null) return "";
     final found = categories.firstWhere(
             (cat) => cat.categoryId == catId,
-        orElse: () => Category(id: "", name: "", description: "", categoryId: catId));
+        orElse: () =>
+            Category(id: "", name: "", description: "", categoryId: catId));
     return found.name.isNotEmpty ? found.name : catId.toString();
   }
 
@@ -494,13 +480,14 @@ class _InventoryScreenState extends State<InventoryScreen>
               child: Text('No products found.',
                   style: TextStyle(color: Colors.black)))
               : Padding(
-            padding: const EdgeInsets.only(bottom: 80.0), // leave space for buttons
+            padding: const EdgeInsets.only(bottom: 80.0),
             child: ListView.builder(
               itemCount: inventory.length,
               itemBuilder: (context, index) {
                 final product = inventory[index];
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 8),
                   child: Material(
                     elevation: 2,
                     borderRadius: BorderRadius.circular(12),
@@ -509,7 +496,8 @@ class _InventoryScreenState extends State<InventoryScreen>
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                            color: Colors.grey.shade300, width: 1),
+                            color: Colors.grey.shade300,
+                            width: 1),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black12,
@@ -520,23 +508,27 @@ class _InventoryScreenState extends State<InventoryScreen>
                         ],
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                        padding: const EdgeInsets.fromLTRB(
+                            12, 10, 12, 10),
                         child: Row(
                           children: [
                             ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius:
+                              BorderRadius.circular(6),
                               child: Image.network(
                                 product["image"] ??
                                     "https://www.pngall.com/wp-content/uploads/8/Sample.png",
                                 height: 50,
                                 width: 50,
                                 fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
+                                errorBuilder: (context, error,
+                                    stackTrace) {
                                   return Container(
                                     color: Colors.grey[200],
                                     height: 50,
                                     width: 50,
-                                    child: const Icon(Icons.image, color: Colors.grey),
+                                    child: const Icon(Icons.image,
+                                        color: Colors.grey),
                                   );
                                 },
                               ),
@@ -544,7 +536,8 @@ class _InventoryScreenState extends State<InventoryScreen>
                             const SizedBox(width: 16),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment:
+                                CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     product["name"] ?? "",
@@ -554,24 +547,32 @@ class _InventoryScreenState extends State<InventoryScreen>
                                       color: Colors.black,
                                     ),
                                     maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                    overflow:
+                                    TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     product["description"] ?? "",
                                     style: const TextStyle(
-                                        color: Colors.grey, fontSize: 12),
+                                        color: Colors.grey,
+                                        fontSize: 12),
                                     maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
+                                    overflow:
+                                    TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 6),
                                   Wrap(
                                     spacing: 5,
                                     runSpacing: 4,
                                     children: [
-                                      _metricBox("Cat", _getCategoryName(product["category"])),
-                                      _metricBox("Unit", product["unit"]),
-                                      _metricBox("SKU", product["sku"]),
+                                      _metricBox("Cat",
+                                          _getCategoryName(
+                                              product[
+                                              "category"])),
+                                      _metricBox("Unit",
+                                          product["unit"]),
+                                      _metricBox(
+                                          "SKU", product["sku"]),
                                     ],
                                   ),
                                   const SizedBox(height: 6),
@@ -579,23 +580,32 @@ class _InventoryScreenState extends State<InventoryScreen>
                                     children: [
                                       _metricBox(
                                           "Buy",
-                                          product["buy_price"] is List &&
-                                              product["buy_price"].isNotEmpty
-                                              ? product["buy_price"][0]
+                                          product["buy_price"]
+                                          is List &&
+                                              product["buy_price"]
+                                                  .isNotEmpty
+                                              ? product["buy_price"]
+                                          [0]
                                               : ""),
                                       const SizedBox(width: 5),
                                       _metricBox(
                                           "Sell",
-                                          product["sell_price"] is List &&
-                                              product["sell_price"].isNotEmpty
-                                              ? product["sell_price"][0]
+                                          product["sell_price"]
+                                          is List &&
+                                              product["sell_price"]
+                                                  .isNotEmpty
+                                              ? product["sell_price"]
+                                          [0]
                                               : ""),
                                       const SizedBox(width: 5),
                                       _metricBox(
                                           "Qty",
-                                          product["quantity"] is List &&
-                                              product["quantity"].isNotEmpty
-                                              ? product["quantity"][0]
+                                          product["quantity"]
+                                          is List &&
+                                              product["quantity"]
+                                                  .isNotEmpty
+                                              ? product["quantity"]
+                                          [0]
                                               : ""),
                                     ],
                                   ),
@@ -606,12 +616,21 @@ class _InventoryScreenState extends State<InventoryScreen>
                             Column(
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-                                  onPressed: () => _showEditProductDialog(context, product),
+                                  icon: const Icon(Icons.edit,
+                                      color: Colors.blue,
+                                      size: 20),
+                                  onPressed: () =>
+                                      _showEditProductDialog(
+                                          context, product),
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
-                                  onPressed: () => _deleteProduct(product['product_id'] ?? 0),
+                                  icon: const Icon(Icons.delete,
+                                      color: Colors.redAccent,
+                                      size: 20),
+                                  onPressed: () =>
+                                      _deleteProduct(
+                                          product['product_id'] ??
+                                              0),
                                 ),
                               ],
                             ),
@@ -636,14 +655,13 @@ class _InventoryScreenState extends State<InventoryScreen>
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      // "Add New Product" navigates as before
                       onPressed: () {
                         Navigator.of(context).push(MaterialPageRoute(
                           builder: (_) => AddNewProductScreen(
                             storeId: storeId,
                             branch: branch,
                             categories: categories,
-                            apiUrl: apiUrl,
+                            apiUrl: API_URL,
                             apiToken: apiToken,
                             fetchInventoryCallback: fetchUserAndInventory,
                           ),
@@ -656,20 +674,21 @@ class _InventoryScreenState extends State<InventoryScreen>
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      child: const Text('Add New Product', style: TextStyle(fontSize: 16, color: Colors.white)),
+                      child: const Text('Add New Product',
+                          style:
+                          TextStyle(fontSize: 16, color: Colors.white)),
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
-                      // "Add Product" navigates the same as "Add New Product"
                       onPressed: () {
                         Navigator.of(context).push(MaterialPageRoute(
                           builder: (_) => AddNewProductScreen(
                             storeId: storeId,
                             branch: branch,
                             categories: categories,
-                            apiUrl: apiUrl,
+                            apiUrl: API_URL,
                             apiToken: apiToken,
                             fetchInventoryCallback: fetchUserAndInventory,
                           ),
@@ -682,7 +701,9 @@ class _InventoryScreenState extends State<InventoryScreen>
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      child: const Text('Add Product', style: TextStyle(fontSize: 16, color: Colors.white)),
+                      child: const Text('Add Product',
+                          style:
+                          TextStyle(fontSize: 16, color: Colors.white)),
                     ),
                   ),
                 ],
@@ -715,8 +736,7 @@ class _InventoryScreenState extends State<InventoryScreen>
           ),
           Text(
             value == null ? "" : value.toString(),
-            style:
-            const TextStyle(color: Colors.black87, fontSize: 10),
+            style: const TextStyle(color: Colors.black87, fontSize: 10),
           ),
         ],
       ),

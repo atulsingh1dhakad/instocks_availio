@@ -15,8 +15,13 @@ void main() async {
 
   final SharedPreferences prefs = await SharedPreferences.getInstance();
   final String? token = prefs.getString('Authorization');
+  final int? expiry = prefs.getInt('TokenExpiry');
+  final bool isLoggedIn = (token != null &&
+      token.isNotEmpty &&
+      expiry != null &&
+      expiry > DateTime.now().millisecondsSinceEpoch);
 
-  runApp(MyApp(isLoggedIn: token != null && token.isNotEmpty));
+  runApp(MyApp(isLoggedIn: isLoggedIn));
 }
 
 class MyApp extends StatelessWidget {
@@ -26,7 +31,67 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: isLoggedIn ? homescreen() : loginscreen(),
+      home: isLoggedIn
+          ? AuthGuard(child: homescreen())
+          : loginscreen(),
     );
+  }
+}
+
+class AuthGuard extends StatefulWidget {
+  final Widget child;
+
+  const AuthGuard({Key? key, required this.child}) : super(key: key);
+
+  @override
+  State<AuthGuard> createState() => _AuthGuardState();
+}
+
+class _AuthGuardState extends State<AuthGuard> {
+  bool isChecking = true;
+  bool isValid = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkToken();
+  }
+
+  Future<void> _checkToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('Authorization');
+    final expiry = prefs.getInt('TokenExpiry');
+    final valid = (token != null &&
+        token.isNotEmpty &&
+        expiry != null &&
+        expiry > DateTime.now().millisecondsSinceEpoch);
+
+    if (!valid) {
+      // Clear token and expiry if needed
+      prefs.remove('Authorization');
+      prefs.remove('TokenExpiry');
+      // Go to login after frame
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => loginscreen()),
+              (route) => false,
+        );
+      });
+    } else {
+      setState(() {
+        isValid = true;
+        isChecking = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isChecking) {
+      return Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return widget.child;
   }
 }

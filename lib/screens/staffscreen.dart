@@ -20,7 +20,6 @@ class _StaffScreenState extends State<StaffScreen> {
 
   static const String apiToken = '0ff738d516ce887efe7274d43acd8043';
 
-
   @override
   void initState() {
     super.initState();
@@ -230,23 +229,22 @@ class _StaffScreenState extends State<StaffScreen> {
             ),
             // Side Staff Info Section (Right)
             Container(
-              width: 350,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.all(Radius.circular(10)),
-                color: Colors.white,
-                border: Border(
-                  left: BorderSide(color: Colors.grey.shade300, width: 1),
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 12,
-                    spreadRadius: 2,
+                width: 350,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.all(Radius.circular(10)),
+                  color: Colors.white,
+                  border: Border(
+                    left: BorderSide(color: Colors.grey.shade300, width: 1),
                   ),
-                ],
-              ),
-              child: ChatSection()
-            ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: ChatSection()),
           ],
         ),
       ),
@@ -412,6 +410,7 @@ class StaffCard extends StatelessWidget {
             CircleAvatar(
               backgroundImage: NetworkImage(staff["avatar"] ?? "https://via.placeholder.com/50"),
               radius: 28,
+              onBackgroundImageError: (exception, stackTrace) {},
             ),
             const SizedBox(width: 18),
             Expanded(
@@ -445,7 +444,7 @@ class StaffCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        staff["phone"] ?? "",
+                        staff["phone"] != null ? staff["phone"].toString() : "", // Fix: always use String
                         style: const TextStyle(fontSize: 12, color: Colors.black54),
                       ),
                     ],

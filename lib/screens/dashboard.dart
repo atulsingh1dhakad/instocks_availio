@@ -35,6 +35,13 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   List<SalesPoint> dataPoints = [];
   AnimationController? _graphAnimController;
 
+  // For interactive tooltip
+  int? _selectedPointIndex;
+  Offset? _selectedPointLocal; // in graph local coords
+  String? _selectedPointLabel;
+
+  final NumberFormat _currency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
+
   @override
   void initState() {
     super.initState();
@@ -198,6 +205,8 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     setState(() {
       _selectedPeriod = period;
       dataPoints = _processGraphData(invoices, _selectedPeriod);
+      _selectedPointIndex = null;
+      _selectedPointLocal = null;
     });
     _graphAnimController?.forward(from: 0.0);
   }
@@ -247,7 +256,52 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       double sum = sorted.fold(0.0, (prev, e) => prev + (e["total"] as num).toDouble());
       points = [SalesPoint("Overall", sum)];
     }
+    // Ensure we have at least one point; if none, provide zero-points across the day for visual parity.
+    if (points.isEmpty) {
+      // If Daily, create hourly 0-data points to emulate example graph baseline
+      if (period == "Daily") {
+        for (int h = 0; h < 24; h += 2) {
+          points.add(SalesPoint('${h.toString().padLeft(2, '0')}:00', 0));
+        }
+      }
+    }
     return points;
+  }
+
+  // total of points
+  double _totalForPoints(List<SalesPoint> pts) => pts.fold(0.0, (p, e) => p + e.value);
+
+  // determine overview label and color based on trend between first and last point
+  Map<String, dynamic> _computeOverview(List<SalesPoint> pts) {
+    if (pts.isEmpty) return {'label': 'No data', 'color': Colors.grey};
+    if (pts.length == 1) {
+      final v = pts.first.value;
+      if (v <= 0) return {'label': 'No data', 'color': Colors.grey};
+      return {'label': 'Stable', 'color': Colors.green};
+    }
+
+    final double first = pts.first.value;
+    final double last = pts.last.value;
+
+    // If first is 0, use presence/absence to determine trend
+    if (first == 0) {
+      if (last == 0) return {'label': 'Stable', 'color': Colors.grey};
+      return {'label': 'Increasing', 'color': Colors.green};
+    }
+
+    final double pct = ((last - first) / first) * 100.0;
+
+    if (pct >= 20) {
+      return {'label': 'Increasing', 'color': Colors.green};
+    } else if (pct >= 5) {
+      return {'label': 'Good', 'color': Colors.lightGreen};
+    } else if (pct > -5) {
+      return {'label': 'Stable', 'color': Colors.blueGrey};
+    } else if (pct > -20) {
+      return {'label': 'Need attention', 'color': Colors.orange};
+    } else {
+      return {'label': 'Terrible', 'color': Colors.red};
+    }
   }
 
   @override
@@ -257,15 +311,18 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       backgroundImage: AssetImage("assets/images/avatar.png"),
     );
 
+    final overview = _computeOverview(dataPoints);
+    final totalSales = _totalForPoints(dataPoints);
+
     return SafeArea(
       child: Scaffold(
         backgroundColor: const Color(0xFFF6F8FB),
         body: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
           child: _loading
-              ? Center(child: CircularProgressIndicator())
+              ? const Center(child: CircularProgressIndicator())
               : _errorMsg != null
-              ? Center(child: Text(_errorMsg!, style: TextStyle(color: Colors.red)))
+              ? Center(child: Text(_errorMsg!, style: const TextStyle(color: Colors.red)))
               : Column(
             children: [
               Row(
@@ -308,7 +365,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                     decoration: BoxDecoration(
-                      color: Color(0xFF23262D),
+                      color: const Color(0xFF23262D),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: const Text(
@@ -332,31 +389,31 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                       value: todaysSales != null ? "₹${todaysSales!.toStringAsFixed(2)}" : "-",
                       sub: "",
                       icon: Icons.bar_chart,
-                      color: Color(0xFF208AFF),
+                      color: const Color(0xFF208AFF),
                     ),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     _dashboardCard(
                       title: "Pending Orders",
                       value: pendingOrdersCount != null ? pendingOrdersCount.toString() : "-",
                       sub: "",
                       icon: Icons.shopping_cart_outlined,
-                      color: Color(0xFFFFB020),
+                      color: const Color(0xFFFFB020),
                     ),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     _dashboardCard(
                       title: "Low stock",
                       value: "12 items",
                       sub: "\u2022 609 S\$8,405.90",
                       icon: Icons.inventory_2_outlined,
-                      color: Color(0xFF6DD9A6),
+                      color: const Color(0xFF6DD9A6),
                     ),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     _dashboardCard(
                       title: "Earnings",
                       value: "\$5,800",
                       sub: "\u2022 685 S\$8,902.90",
                       icon: Icons.account_balance_wallet_outlined,
-                      color: Color(0xFF208AFF),
+                      color: const Color(0xFF208AFF),
                     ),
                   ],
                 ),
@@ -368,7 +425,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(28),
-                    boxShadow: [
+                    boxShadow: const [
                       BoxShadow(
                         color: Colors.black12,
                         blurRadius: 12,
@@ -383,7 +440,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                       Row(
                         children: [
                           Container(
-                            padding: EdgeInsets.symmetric(horizontal: 18),
+                            padding: const EdgeInsets.symmetric(horizontal: 18),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(10),
@@ -406,8 +463,8 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                                 child: DropdownButton<String>(
                                   value: _selectedPeriod,
                                   isExpanded: true,
-                                  icon: Icon(Icons.arrow_drop_down),
-                                  style: TextStyle(
+                                  icon: const Icon(Icons.arrow_drop_down),
+                                  style: const TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.w600,
                                     color: Colors.black,
@@ -428,15 +485,15 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                               ),
                             ),
                           ),
-                          Spacer(),
+                          const Spacer(),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      // Increase graph height and add more bottom padding for better label visibility
+                      // Graph area wrapped in LayoutBuilder to compute positions for hit detection
                       SizedBox(
-                        height: 280, // Increased height for graph
+                        height: 280,
                         child: Padding(
-                          padding: const EdgeInsets.only(bottom: 40, left: 8, right: 8), // Add more bottom space
+                          padding: const EdgeInsets.only(bottom: 40, left: 8, right: 8),
                           child: AnimatedBuilder(
                             animation: _graphAnimController!,
                             builder: (context, child) {
@@ -445,6 +502,77 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                           ),
                         ),
                       ),
+
+                      const SizedBox(height: 12),
+
+                      // Below the graph: total sales and overview single-word status
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey.shade200),
+                                boxShadow: [
+                                  BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Total Sales', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                                  const SizedBox(height: 6),
+                                  Text(_currency.format(totalSales), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey.shade200),
+                                boxShadow: [
+                                  BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: BoxDecoration(
+                                      color: overview['color'] as Color,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      overview['label'] as String,
+                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: overview['color'] as Color),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: () {
+                                      // Optionally show more details
+                                      final snack = '${overview['label']} — total ${_currency.format(totalSales)}';
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(snack)));
+                                    },
+                                    icon: Icon(Icons.info_outline, color: Colors.grey.shade600),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
                       const SizedBox(height: 18),
                     ],
                   ),
@@ -473,7 +601,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
+          boxShadow: const [
             BoxShadow(
               color: Colors.black12,
               blurRadius: 10,
@@ -503,7 +631,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
               const SizedBox(height: 6),
               Text(
                 value,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: Colors.black,
@@ -514,7 +642,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                 sub,
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[500],
+                  color: Colors.grey,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -525,19 +653,176 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     );
   }
 
+  // New sales graph that supports area fill + grid + tooltip on hit
   Widget _salesGraph(List<SalesPoint> points, double animValue) {
     if (points.isEmpty) {
       return Center(child: Text("No sales data for selected period.", style: TextStyle(color: Colors.grey)));
     }
-    double maxY = points.map((e) => e.value).fold(0.0, (prev, val) => val > prev ? val : prev);
-    double pad = points.length > 1 ? (360 / (points.length - 1)) : 0; // Increased pad for more space between points
-    return Container(
-      width: double.infinity,
-      height: 240, // Increased height for graph canvas
-      child: CustomPaint(
-        painter: SalesGraphPainter(points, animValue, maxY, pad),
-      ),
-    );
+
+    final double yLabelWidth = 70; // same as painter
+    final double leftMargin = yLabelWidth + 12;
+    final double rightMargin = 20;
+    final double bottomMargin = 10;
+    final double topMargin = 18;
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final Size size = Size(constraints.maxWidth, constraints.maxHeight);
+      final double graphWidth = size.width - leftMargin - rightMargin;
+      final double pad = points.length > 1 ? (graphWidth / (points.length - 1)) : 0;
+      final double maxY = points.map((e) => e.value).fold(0.0, (prev, val) => val > prev ? val : prev);
+
+      // compute local graph points (same logic as painter)
+      final List<Offset> graphPoints = [];
+      for (int i = 0; i < points.length; i++) {
+        final double x = leftMargin + pad * i;
+        final double graphHeight = size.height - topMargin - bottomMargin;
+        final double y = topMargin + graphHeight - ((points[i].value / (maxY == 0 ? 1 : maxY)) * graphHeight);
+        graphPoints.add(Offset(x, y));
+      }
+
+      return Stack(
+        children: [
+          // Painter draws curve + fill + grid + points
+          CustomPaint(
+            size: size,
+            painter: SalesGraphPainter(
+              points,
+              animValue,
+              maxY,
+              pad,
+              leftMargin,
+              topMargin,
+              bottomMargin,
+              rightMargin,
+            ),
+          ),
+
+          // Gesture detector overlays the graph for hit testing
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTapDown: (details) {
+                final local = details.localPosition;
+                _handleGraphTap(local, graphPoints, points);
+              },
+              onPanDown: (details) {
+                final local = details.localPosition;
+                _handleGraphTap(local, graphPoints, points);
+              },
+              onPanUpdate: (details) {
+                final local = details.localPosition;
+                _handleGraphTap(local, graphPoints, points);
+              },
+              onTap: () {
+                // if tapped outside a point, hide tooltip after short delay
+                // kept intentionally simple: hide if no index selected
+                if (_selectedPointIndex == null) {
+                  setState(() {
+                    _selectedPointLocal = null;
+                    _selectedPointLabel = null;
+                  });
+                }
+              },
+            ),
+          ),
+
+          // Tooltip
+          if (_selectedPointIndex != null && _selectedPointLocal != null)
+            Positioned(
+              // position tooltip above the point; clamp inside graph bounds
+              left: (_selectedPointLocal!.dx - 60).clamp(0.0, size.width - 120),
+              top: (_selectedPointLocal!.dy - 48).clamp(0.0, size.height - 40),
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: 120,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _selectedPointLabel ?? '',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        // show value with currency formatting
+                        _currency.format(points[_selectedPointIndex!].value),
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    });
+  }
+
+  // Fixed null-safety safe handleGraphTap
+  void _handleGraphTap(Offset local, List<Offset> graphPoints, List<SalesPoint> points) {
+    if (graphPoints.isEmpty || points.isEmpty) {
+      setState(() {
+        _selectedPointIndex = null;
+        _selectedPointLocal = null;
+        _selectedPointLabel = null;
+      });
+      return;
+    }
+
+    // Find nearest point by distance (within a threshold)
+    const double threshold = 24.0;
+    int? nearestIdx;
+    double nearestDist = double.infinity;
+    for (int i = 0; i < graphPoints.length; i++) {
+      final d = (graphPoints[i] - local).distance;
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearestIdx = i;
+      }
+    }
+
+    // If we found a nearest index and it's within the threshold, select it.
+    if (nearestIdx != null && nearestDist <= threshold) {
+      final int idx = nearestIdx; // non-nullable local copy
+      setState(() {
+        _selectedPointIndex = idx;
+        _selectedPointLocal = graphPoints[idx];
+        // create a compact label for X (if it's a full date, shorten it)
+        final String label = points[idx].xLabel;
+        String short = label;
+        try {
+          if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(label)) {
+            final dt = DateTime.parse(label);
+            short = DateFormat('dd MMM').format(dt);
+          } else if (RegExp(r'^\d{2}:\d{2}$').hasMatch(label)) {
+            short = label;
+          } else if (label.length > 12) {
+            short = label.substring(0, 12) + '...';
+          }
+        } catch (_) {
+          // ignore parsing errors and fall back to original label
+        }
+        _selectedPointLabel = short;
+      });
+    } else {
+      setState(() {
+        _selectedPointIndex = null;
+        _selectedPointLocal = null;
+        _selectedPointLabel = null;
+      });
+    }
   }
 }
 
@@ -547,89 +832,121 @@ class SalesPoint {
   SalesPoint(this.xLabel, this.value);
 }
 
+// Painter draws grid, smooth line, filled area, dots and highlighted point
 class SalesGraphPainter extends CustomPainter {
   final List<SalesPoint> points;
   final double animValue;
   final double maxY;
   final double pad;
+  final double leftMargin;
+  final double topMargin;
+  final double bottomMargin;
+  final double rightMargin;
 
-  SalesGraphPainter(this.points, this.animValue, this.maxY, this.pad);
+  SalesGraphPainter(this.points, this.animValue, this.maxY, this.pad, this.leftMargin, this.topMargin,
+      this.bottomMargin, this.rightMargin);
 
   @override
   void paint(Canvas canvas, Size size) {
     if (points.isEmpty) return;
 
-    final double yLabelWidth = 70; // Fixed width for Y labels
-    final double leftMargin = yLabelWidth + 12; // Margin for Y labels + some padding
-    final double rightMargin = 20;
-    final double bottomMargin =10; // Increased bottom margin for date labels
-    final double topMargin = 18;
+    final double graphWidth = size.width - leftMargin - rightMargin;
+    final double graphHeight = size.height - topMargin - bottomMargin;
 
-    final paint = Paint()
-      ..color = Colors.grey
-      ..strokeWidth = 5
-      ..style = PaintingStyle.stroke;
-    final dotPaint = Paint()..color = Colors.blue;
-
-    List<Offset> graphPoints = [];
+    // compute points positions
+    final List<Offset> graphPoints = [];
     for (int i = 0; i < points.length; i++) {
-      double x = leftMargin + pad * i;
-      double graphHeight = size.height - topMargin - bottomMargin;
-      double y = topMargin + graphHeight - ((points[i].value / (maxY == 0 ? 1 : maxY)) * graphHeight);
+      final double x = leftMargin + pad * i;
+      final double y = topMargin + graphHeight - ((points[i].value / (maxY == 0 ? 1 : maxY)) * graphHeight) * animValue;
       graphPoints.add(Offset(x, y));
     }
 
-    // Draw smooth curve using quadratic Bezier segments
-    Path path = Path();
+    final Paint gridPaint = Paint()
+      ..color = Colors.grey.shade300
+      ..strokeWidth = 1;
+    // horizontal grid lines
+    int nGrid = 6;
+    for (int i = 0; i < nGrid; i++) {
+      double y = topMargin + graphHeight - (i / (nGrid - 1)) * graphHeight;
+      canvas.drawLine(Offset(leftMargin, y), Offset(size.width - rightMargin, y), gridPaint);
+    }
+
+    // Fill area under curve
+    final Path fillPath = Path();
     if (graphPoints.isNotEmpty) {
-      path.moveTo(graphPoints[0].dx, graphPoints[0].dy);
+      fillPath.moveTo(graphPoints[0].dx, graphPoints[0].dy);
       for (int i = 0; i < graphPoints.length - 1; i++) {
-        Offset p1 = graphPoints[i];
-        Offset p2 = graphPoints[i + 1];
-        double controlX = (p1.dx + p2.dx) / 2;
-        path.quadraticBezierTo(controlX, p1.dy, p2.dx, p2.dy);
+        final p1 = graphPoints[i];
+        final p2 = graphPoints[i + 1];
+        final controlX = (p1.dx + p2.dx) / 2;
+        fillPath.quadraticBezierTo(controlX, p1.dy, p2.dx, p2.dy);
+      }
+      // go down to bottom and close
+      fillPath.lineTo(graphPoints.last.dx, topMargin + graphHeight);
+      fillPath.lineTo(graphPoints.first.dx, topMargin + graphHeight);
+      fillPath.close();
+    }
+
+    // area gradient
+    final Rect areaRect = Rect.fromLTRB(leftMargin, topMargin, size.width - rightMargin, topMargin + graphHeight);
+    final Gradient areaGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Colors.blue.withOpacity(0.12), Colors.blue.withOpacity(0.03)],
+    );
+    final Paint fillPaint = Paint()..shader = areaGradient.createShader(areaRect);
+    canvas.drawPath(fillPath, fillPaint);
+
+    // Stroke path
+    final Path strokePath = Path();
+    if (graphPoints.isNotEmpty) {
+      strokePath.moveTo(graphPoints[0].dx, graphPoints[0].dy);
+      for (int i = 0; i < graphPoints.length - 1; i++) {
+        final p1 = graphPoints[i];
+        final p2 = graphPoints[i + 1];
+        final controlX = (p1.dx + p2.dx) / 2;
+        strokePath.quadraticBezierTo(controlX, p1.dy, p2.dx, p2.dy);
       }
     }
-    canvas.drawPath(path, paint);
+
+    final Paint strokePaint = Paint()
+      ..color = Colors.blue.shade800
+      ..strokeWidth = 2.6
+      ..style = PaintingStyle.stroke
+      ..isAntiAlias = true;
+    canvas.drawPath(strokePath, strokePaint);
 
     // Draw dots
+    final Paint dotPaint = Paint()..color = Colors.white;
+    final Paint dotEdge = Paint()
+      ..color = Colors.blue.shade800
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
     for (int i = 0; i < graphPoints.length; i++) {
-      canvas.drawCircle(graphPoints[i], 8, dotPaint);
-      canvas.drawCircle(graphPoints[i], 4, Paint()..color = Colors.black);
+      final p = graphPoints[i];
+      canvas.drawCircle(p, 5.5, dotPaint);
+      canvas.drawCircle(p, 5.5, dotEdge);
     }
 
-    // Draw X labels (dates) below points
-    final textStyle = TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w600);
-    for (int i = 0; i < graphPoints.length; i++) {
-      final tp = TextPainter(
-        text: TextSpan(text: points[i].xLabel, style: textStyle),
-        textDirection: ui.TextDirection.ltr,
-      )..layout(minWidth: 0, maxWidth: pad * 0.8);
-      tp.paint(canvas, Offset(graphPoints[i].dx - tp.width / 3, size.height - bottomMargin + 20));
-    }
-
-    // Draw Y labels (prices) along left margin, all at same x position
-    final yAxisStyle = TextStyle(color: Colors.grey[800], fontSize: 12, fontWeight: FontWeight.w500);
-    int nGrid = 5;
+    // Draw tick Y labels and dashed minor grid lines already handled above
+    final TextStyle yAxisStyle = TextStyle(color: Colors.grey[800], fontSize: 12, fontWeight: FontWeight.w500);
     for (int j = 0; j < nGrid; j++) {
-      double graphHeight = size.height - topMargin - bottomMargin;
       double y = topMargin + graphHeight - ((j / (nGrid - 1)) * graphHeight);
       double val = (maxY / (nGrid - 1)) * j;
       final tp = TextPainter(
         text: TextSpan(text: "₹${val.toStringAsFixed(0)}", style: yAxisStyle),
         textDirection: ui.TextDirection.ltr,
-      )..layout(minWidth: 0, maxWidth: yLabelWidth);
-      tp.paint(canvas, Offset(leftMargin - yLabelWidth, y - tp.height / 2));
-      canvas.drawLine(
-        Offset(leftMargin, y),
-        Offset(size.width - rightMargin, y),
-        Paint()
-          ..color = Colors.grey.shade300
-          ..strokeWidth = 1,
-      );
+      )..layout(minWidth: 0, maxWidth: leftMargin - 8);
+      tp.paint(canvas, Offset(leftMargin - tp.width - 8, y - tp.height / 2));
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant SalesGraphPainter oldDelegate) {
+    return oldDelegate.points != points ||
+        oldDelegate.animValue != animValue ||
+        oldDelegate.maxY != maxY ||
+        oldDelegate.pad != pad;
+  }
 }

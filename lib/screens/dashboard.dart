@@ -504,7 +504,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                       ),
 
                       const SizedBox(height: 12),
-
                       // Below the graph: total sales and overview single-word status
                       Row(
                         children: [

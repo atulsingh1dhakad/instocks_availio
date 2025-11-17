@@ -32,7 +32,6 @@ class _createAccountState extends State<createAccount> {
       _error = null;
       _success = null;
     });
-
     final String? apiKey = dotenv.env['API_KEY'];
     final url = Uri.parse('${API_URL}users/register');
     try {

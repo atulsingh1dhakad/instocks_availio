@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../consts.dart';
+import '../../consts.dart';
 import 'InventoryScreen.dart';
 
 class AddNewProductScreen extends StatefulWidget {

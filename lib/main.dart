@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:instockavailio/screens/homescreen.dart';
-import 'package:instockavailio/screens/loginscreen.dart';
+import 'package:instockavailio/src/screens/homescreen.dart';
+import 'package:instockavailio/src/screens/loginscreen.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {

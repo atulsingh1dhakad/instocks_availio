@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-import '../consts.dart';
+import '../../consts.dart';
 
 class createAccount extends StatefulWidget {
   const createAccount({super.key});

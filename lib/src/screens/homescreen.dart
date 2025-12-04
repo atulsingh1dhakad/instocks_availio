@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:instockavailio/screens/myinvoices.dart';
-import 'package:instockavailio/screens/orderscreen.dart';
-import 'package:instockavailio/screens/profilescreen.dart';
-import 'package:instockavailio/screens/recylebin.dart';
-import 'package:instockavailio/screens/staffscreen.dart';
+import 'package:instockavailio/src/screens/myinvoices.dart';
+import 'package:instockavailio/src/screens/orderscreen.dart';
+import 'package:instockavailio/src/screens/profilescreen.dart';
+import 'package:instockavailio/src/screens/recylebin.dart';
+import 'package:instockavailio/src/screens/staffscreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'InventoryScreen.dart';

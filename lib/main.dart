@@ -57,7 +57,6 @@ class _AuthGuardState extends State<AuthGuard> {
     super.initState();
     _checkToken();
   }
-
   Future<void> _checkToken() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('Authorization');

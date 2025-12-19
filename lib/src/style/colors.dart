@@ -36,4 +36,14 @@ class AppColors {
   // Used in staff table
   static const Color staffTableRow = Color(0xFF2C2C2C);
   static const Color staffTableHeading = Color(0xFF111315);
+  static const primary = Color(0xFF49A97C);
+  static const primaryDark = Color(0xFF38875F);
+  static const accent = Color(0xFF6C8AE3);
+  static const bg = Color(0xFFF7F9FB);
+  static const background = Color(0xFFF7FAF7);
+  static const card = Colors.white;
+  static const danger = Color(0xFFE53935);
+  static const text = Color(0xff212121);
+
+
 }

@@ -39,10 +39,10 @@ class _POSHomeScreenState extends State<POSHomeScreen> {
     StaffScreen(),
     InventoryScreen(),
     OrdersScreen(),
-    Billingscreen(),
-    recyclebin(),
+    BillingScreen(),
+    RecycleBinScreen(),
     ProfileScreen(),
-    MyInvoices(),
+    InvoicesScreen(),
   ];
 
   final List<Map<String, dynamic>> _menuItems = [

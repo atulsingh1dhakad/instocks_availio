@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/category_model.dart';
 import 'addnewproduct.dart';
 import '../ui/inventory_skeleton.dart';
+import '../helpers/auth_helper.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({Key? key}) : super(key: key);
@@ -89,6 +90,7 @@ class _InventoryScreenState extends State<InventoryScreen>
     });
 
     try {
+      final headers = await AuthHelper.getAuthHeaders(apiToken: API_TOKEN);
 
       final userUrl = _buildUri('users/me');
       debugPrint('GET $userUrl');
@@ -155,14 +157,12 @@ class _InventoryScreenState extends State<InventoryScreen>
         }
       }
 
-        setState(() {
-          isLoading = false;
-        });
-        return;
-      }
       setState(() {
         inventory = items;
         isLoading = false;
+        if (items.isEmpty && lastResp != null && lastResp.statusCode != 200) {
+           errorMessage = "Inventory fetch returned ${lastResp.statusCode}";
+        }
       });
     } catch (e) {
       setState(() {
@@ -174,6 +174,7 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   Future<void> fetchCategories() async {
     try {
+      final headers = await AuthHelper.getAuthHeaders(apiToken: API_TOKEN);
       final uri = _buildUri('category');
       final response = await http.get(uri, headers: headers);
 
@@ -193,9 +194,11 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   Future<void> _deleteProduct(int productId) async {
     try {
+      final headers = await AuthHelper.getAuthHeaders(apiToken: API_TOKEN);
       final url = _buildUri('products/del-prod');
       final resp = await http.post(url, headers: headers, body: jsonEncode({"product_id": productId}));
       if (resp.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Product deleted")));
         await fetchUserAndInventory();
       }
     } catch (e) {

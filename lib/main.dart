@@ -119,7 +119,7 @@ class RootPage extends StatelessWidget {
         if (state is AuthUninitialized || state is AuthLoading) {
           return const Scaffold(body: Center(child: LoadingWidget()));
         } else if (state is AuthAuthenticated) {
-          return homescreen();
+          return const HomeScreen();
         } else {
           return const loginscreen();
         }

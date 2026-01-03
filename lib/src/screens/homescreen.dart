@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:instockavailio/src/screens/myinvoices.dart';
 import 'package:instockavailio/src/screens/orderscreen.dart';
@@ -11,7 +12,9 @@ import 'billing.dart';
 import 'dashboard.dart';
 import 'loginscreen.dart';
 
-class homescreen extends StatelessWidget {
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -19,15 +22,17 @@ class homescreen extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.green,
       ),
-      home: POSHomeScreen(),
+      home: const POSHomeScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
 
 class POSHomeScreen extends StatefulWidget {
+  const POSHomeScreen({super.key});
+
   @override
-  _POSHomeScreenState createState() => _POSHomeScreenState();
+  State<POSHomeScreen> createState() => _POSHomeScreenState();
 }
 
 class _POSHomeScreenState extends State<POSHomeScreen> {
@@ -35,14 +40,14 @@ class _POSHomeScreenState extends State<POSHomeScreen> {
 
   // List of screens for main content
   final List<Widget> _screens = [
-    DashboardScreen(),
-    StaffScreen(),
-    InventoryScreen(),
-    OrdersScreen(),
-    BillingScreen(),
-    RecycleBinScreen(),
-    ProfileScreen(),
-    InvoicesScreen(),
+    const DashboardScreen(),
+    const StaffScreen(),
+    const InventoryScreen(),
+    const OrdersScreen(),
+    const BillingScreen(),
+    const RecycleBinScreen(),
+    const ProfileScreen(),
+    const InvoicesScreen(),
   ];
 
   final List<Map<String, dynamic>> _menuItems = [
@@ -83,16 +88,17 @@ class _POSHomeScreenState extends State<POSHomeScreen> {
       ),
     );
 
-    if (shouldLogout == true) {
+    if (shouldLogout == true && mounted) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('access_token');
       await prefs.remove('token_type');
       await prefs.remove('Authorization');
       await prefs.remove('user_id');
-      if (mounted) {
+      
+      if (context.mounted) {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => loginscreen()),
+          MaterialPageRoute(builder: (context) => const loginscreen()),
               (Route<dynamic> route) => false,
         );
       }
@@ -110,8 +116,8 @@ class _POSHomeScreenState extends State<POSHomeScreen> {
             Container(
               width: 200,
               height: double.infinity,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
@@ -120,11 +126,11 @@ class _POSHomeScreenState extends State<POSHomeScreen> {
                     Color(0xFFEFF2F6),
                   ],
                 ),
-                borderRadius: const BorderRadius.only(
+                borderRadius: BorderRadius.only(
                   topRight: Radius.circular(16),
                   bottomRight: Radius.circular(16),
                 ),
-                boxShadow: const [
+                boxShadow: [
                   BoxShadow(
                     color: Colors.black12,
                     blurRadius: 6,
@@ -253,7 +259,7 @@ class _POSHomeScreenState extends State<POSHomeScreen> {
           height: 44,
           decoration: BoxDecoration(
             color: selected
-                ? Color(0xFF0C375A) // selected background
+                ? const Color(0xFF0C375A) // selected background
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(16),
           ),

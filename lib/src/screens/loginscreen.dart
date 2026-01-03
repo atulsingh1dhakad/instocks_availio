@@ -111,7 +111,7 @@ class _loginscreenState extends State<loginscreen> {
     return BlocListener<AuthBloc, dynamic>(
       listener: (context, state) {
         if (state is AuthAuthenticated) {
-          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => homescreen()));
+          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
         }
       },
       child: Scaffold(

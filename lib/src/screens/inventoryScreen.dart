@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/category_model.dart';
 import 'addnewproduct.dart';
 import '../ui/inventory_skeleton.dart';
-import '../helpers/auth_helper.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({Key? key}) : super(key: key);
@@ -90,13 +89,10 @@ class _InventoryScreenState extends State<InventoryScreen>
     });
 
     try {
-      // Use standardized AuthHelper to get correctly formatted headers
-      final headers = await AuthHelper.getAuthHeaders(apiToken: API_TOKEN);
 
       final userUrl = _buildUri('users/me');
       debugPrint('GET $userUrl');
       final userResp = await http.get(userUrl, headers: headers);
-      debugPrint('users/me -> ${userResp.statusCode}');
 
       if (userResp.statusCode != 200) {
         String detail = userResp.body;
@@ -159,14 +155,11 @@ class _InventoryScreenState extends State<InventoryScreen>
         }
       }
 
-      if (items.isEmpty && lastResp != null && lastResp.statusCode != 200) {
         setState(() {
           isLoading = false;
-          errorMessage = "Inventory fetch returned ${lastResp?.statusCode}";
         });
         return;
       }
-
       setState(() {
         inventory = items;
         isLoading = false;
@@ -181,7 +174,6 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   Future<void> fetchCategories() async {
     try {
-      final headers = await AuthHelper.getAuthHeaders(apiToken: API_TOKEN);
       final uri = _buildUri('category');
       final response = await http.get(uri, headers: headers);
 
@@ -201,11 +193,9 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   Future<void> _deleteProduct(int productId) async {
     try {
-      final headers = await AuthHelper.getAuthHeaders(apiToken: API_TOKEN);
       final url = _buildUri('products/del-prod');
       final resp = await http.post(url, headers: headers, body: jsonEncode({"product_id": productId}));
       if (resp.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Product deleted")));
         await fetchUserAndInventory();
       }
     } catch (e) {
@@ -318,7 +308,6 @@ class _InventoryScreenState extends State<InventoryScreen>
             Expanded(
               child: ElevatedButton(
                 onPressed: () {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddNewProductScreen(storeId: storeId, branch: branch, categories: categories, apiUrl: API_URL, apiToken: API_TOKEN, fetchInventoryCallback: fetchUserAndInventory)));
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                 child: const Text('Add New Product', style: TextStyle(fontSize: 16, color: Colors.white)),
